@@ -1,0 +1,21 @@
+{
+    "name": "cfarm/app",
+    "description": "cfarm - webapp quản lý trang trại gà",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "nikic/fast-route": "^1.3",
+        "minishlink/web-push": "^9.0",
+        "php-mqtt/client": "^2.3"
+    },
+    "autoload": {
+        "classmap": [
+            "app/domains",
+            "app/infrastructure",
+            "app/interfaces"
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
