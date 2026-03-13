@@ -1,5 +1,17 @@
 # Version History - cfarm.vn
 
+## [v0.1.1] - 2026-03-13
+### Fixed
+- Inventory delete item functionality
+  - Add debug logging to deleteItem function for troubleshooting
+  - Fix stock check query: only count positive quantities (quantity > 0)
+  - Improve frontend to show alert message after delete attempt
+
+### Changed
+- 2 files changed
+
+---
+
 ## [v0.1.0] - 2026-03-13
 ### Added
 - Add care_litters feature to cycle detail page
