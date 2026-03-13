@@ -60,26 +60,37 @@ class InventoryEditController
     public function deleteItem(array $vars): never
     {
         $id = (int)($vars['id'] ?? 0);
-        error_log("DEBUG deleteItem: id=$id");
 
-        // Debug: check current status
+        // Check if item exists
         $check = $this->db->prepare("SELECT id, name, status FROM inventory_items WHERE id=?");
         $check->execute([$id]);
         $item = $check->fetch(PDO::FETCH_ASSOC);
-        error_log("DEBUG deleteItem: item=" . json_encode($item));
 
-        // Chỉ tính các record có quantity > 0
+        if (!$item) {
+            $this->json(false, null, 'Không tìm thấy vật tư');
+        }
+
+        // If already inactive, consider it deleted
+        if ($item['status'] === 'inactive') {
+            $this->json(true);
+        }
+
+        // Check stock - only count positive quantities
         $s = $this->db->prepare("SELECT COALESCE(SUM(quantity),0) FROM inventory_stock WHERE item_id=? AND quantity > 0");
         $s->execute([$id]);
         $total = (float)$s->fetchColumn();
-        error_log("DEBUG deleteItem: total_stock=$total");
 
-        if ($total > 0) $this->json(false,null,"Không thể xóa: còn {$total} trong kho.");
+        if ($total > 0) {
+            $this->json(false, null, "Không thể xóa: còn {$total} trong kho.");
+        }
 
-        // Try update
-        $stmt = $this->db->prepare("UPDATE inventory_items SET status='inactive' WHERE id=?");
-        $result = $stmt->execute([$id]);
-        error_log("DEBUG deleteItem: update_result=" . ($result ? 'true' : 'false') . ", rows=" . $stmt->rowCount());
+        // Update status to inactive
+        $stmt = $this->db->prepare("UPDATE inventory_items SET status='inactive' WHERE id=? AND status='active'");
+        $stmt->execute([$id]);
+
+        if ($stmt->rowCount() === 0) {
+            $this->json(false, null, 'Không thể xóa vật tư');
+        }
 
         $this->json(true);
     }
