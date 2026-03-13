@@ -55,8 +55,13 @@ class InventoryRepository
     // ITEMS
     public function list_items(?string $category = null): array
     {
-        $where = $category ? "WHERE ii.category=:cat" : "";
-        $params = $category ? [':cat'=>$category] : [];
+        $clauses = ["ii.status='active'"];
+        $params = [];
+        if ($category) {
+            $clauses[] = "ii.category=:cat";
+            $params[':cat'] = $category;
+        }
+        $where = "WHERE " . implode(" AND ", $clauses);
         return $this->fetch_all("
             SELECT ii.*, s.name AS supplier_name,
                    m.name AS medication_name, fb.name AS feed_brand_name
