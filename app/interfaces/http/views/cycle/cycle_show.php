@@ -682,9 +682,19 @@ $gender_labels = ['male' => 'Trống', 'female' => 'Mái', 'mixed' => 'Hỗn h�
             <div class="text-sm font-semibold mb-3">➕ Ghi trấu/lót chuồng</div>
             <form method="POST" action="/inventory/litter" class="space-y-3">
                 <input type="hidden" name="cycle_id" value="<?= e($cycle->id) ?>">
+                <div>
+                    <label class="text-xs text-gray-400 mb-1 block">Loại trấu (từ kho)</label>
+                    <select name="item_id" required
+                            class="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Chọn loại trấu --</option>
+                        <?php foreach ($litter_items as $item): ?>
+                        <option value="<?= $item['id'] ?>"><?= e($item['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="text-xs text-gray-400 mb-1 block">Số lượng</label>
+                        <label class="text-xs text-gray-400 mb-1 block">Số lượng (bao)</label>
                         <input type="number" name="quantity" step="0.5" min="0.5" required
                                placeholder="VD: 5"
                                class="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">

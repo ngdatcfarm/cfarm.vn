@@ -255,12 +255,20 @@ class InventoryController
             $qty      = (float)($_POST['quantity'] ?? 0);
             $item_id  = !empty($_POST['item_id']) ? (int)$_POST['item_id'] : null;
             if (!$cycle_id) throw new \InvalidArgumentException('Thiếu cycle');
+            if (!$item_id) throw new \InvalidArgumentException('Chọn loại trấu từ kho');
             if ($qty <= 0)  throw new \InvalidArgumentException('Số lượng phải > 0');
             $stmt = $this->pdo->prepare("SELECT barn_id FROM cycles WHERE id=:id AND status='active'");
             $stmt->execute([':id'=>$cycle_id]);
             $c = $stmt->fetch();
             if (!$c) throw new \InvalidArgumentException('Cycle không hợp lệ hoặc đã đóng');
             $barn_id = (int)$c['barn_id'];
+
+            // Kiểm tra tồn kho trước khi trừ
+            $current_stock = $this->repo->get_stock($item_id, $barn_id);
+            if ($current_stock < $qty) {
+                throw new \InvalidArgumentException("Tồn kho không đủ! Hiện có: " . number_format($current_stock, 1) . " bao, cần: " . number_format($qty, 1) . " bao");
+            }
+
             $this->repo->create_litter([
                 'cycle_id'   => $cycle_id,
                 'item_id'    => $item_id,
@@ -269,18 +277,16 @@ class InventoryController
                 'note'       => !empty($_POST['note']) ? trim($_POST['note']) : null,
                 'recorded_at'=> $_POST['recorded_at'] ?? date('Y-m-d H:i:s'),
             ]);
-            if ($item_id) {
-                $this->repo->upsert_stock($item_id, $barn_id, -$qty);
-                $this->repo->create_transaction([
-                    'item_id'      => $item_id,
-                    'txn_type'     => 'use_litter',
-                    'from_barn_id' => $barn_id,
-                    'quantity'     => $qty,
-                    'cycle_id'     => $cycle_id,
-                    'note'         => "Trải trấu - cycle #{$cycle_id}",
-                    'recorded_at'  => date('Y-m-d H:i:s'),
-                ]);
-            }
+            $this->repo->upsert_stock($item_id, $barn_id, -$qty);
+            $this->repo->create_transaction([
+                'item_id'      => $item_id,
+                'txn_type'     => 'use_litter',
+                'from_barn_id' => $barn_id,
+                'quantity'     => $qty,
+                'cycle_id'     => $cycle_id,
+                'note'         => "Trải trấu - cycle #{$cycle_id}",
+                'recorded_at'  => date('Y-m-d H:i:s'),
+            ]);
             $this->json(true, 'Đã ghi sử dụng trấu');
         } catch (\InvalidArgumentException $e) {
             $this->json(false, $e->getMessage());

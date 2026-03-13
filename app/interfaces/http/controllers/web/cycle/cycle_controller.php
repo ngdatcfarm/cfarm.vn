@@ -165,6 +165,11 @@ class CycleController
         $stmt->execute([':id' => $cycle->id]);
         $litters = $stmt->fetchAll();
 
+        // Litter items for dropdown
+        $stmt = $this->pdo->prepare("SELECT * FROM inventory_items WHERE sub_category = 'litter' AND status = 'active' ORDER BY name");
+        $stmt->execute();
+        $litter_items = $stmt->fetchAll();
+
         // Health notes
         $stmt = $this->pdo->prepare("SELECT * FROM health_notes WHERE cycle_id=:id ORDER BY recorded_at DESC");
         $stmt->execute([':id' => $cycle->id]);

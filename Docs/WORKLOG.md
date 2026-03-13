@@ -13,6 +13,13 @@
   5. Bảng care_expenses - routes hạn chế
   6. Thiếu route cho health_notes
 
+### 2026-03-13 (tiếp)
+- Fix care_litters tích hợp inventory:
+  - Thêm dropdown chọn item từ inventory_items (loại litter) trong form cycle_show.php
+  - Thêm kiểm tra tồn kho trước khi trừ stock trong inventory_controller.php
+  - Hiển thị lỗi nếu tồn kho không đủ: "Tồn kho không đủ! Hiện có: X bao, cần: Y bao"
+- Commit: `97750f8 fix: integrate care_litters with inventory - add item selection and stock validation`
+
 ## 2026-02-03
 - Chốt thiết kế Chương I – ENV
 - Quyết định dùng env_data dạng long format
