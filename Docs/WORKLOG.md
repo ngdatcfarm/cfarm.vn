@@ -1,5 +1,18 @@
 # WORK LOG – app.cfarm.vn
 
+## 2026-03-13
+- Tổng hợp tất cả router thành file `Docs/ROUTERS.md`
+- Liệt kê ~100+ routes theo từng domain: Auth, Home, Barn, Cycle, Care, Weight, ENV, Vaccine, Health, Inventory, Report, Export, Event, Expense, Push, IoT, Settings
+- Clone database `cfarm_app_raw` từ cloud server về (file `c:\dev\cfarm_app_raw.sql`)
+- Xác định 44 bảng trong database: barns, cycles, care_*, devices, env_readings, feed_*, inventory_*, medications, vaccine_*, weight_*, users, notifications...
+- Phân tích logic router vs database - phát hiện 6 vấn đề cần fix:
+  1. Thiếu route list cycles theo barn
+  2. Care routes thiếu cycle_id trong URL
+  3. Thiếu route list cho Care records
+  4. Bảng care_litters không có route
+  5. Bảng care_expenses - routes hạn chế
+  6. Thiếu route cho health_notes
+
 ## 2026-02-03
 - Chốt thiết kế Chương I – ENV
 - Quyết định dùng env_data dạng long format

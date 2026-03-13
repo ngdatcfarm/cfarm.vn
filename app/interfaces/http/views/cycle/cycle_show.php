@@ -99,6 +99,7 @@ $gender_labels = ['male' => 'Trống', 'female' => 'Mái', 'mixed' => 'Hỗn h�
                 'sale'       => '💰 Bán gà',
                 'health'     => '🏥 Sức khỏe',
                 'expense'    => '💸 Chi phí',
+                'litter'     => '🪨 Trấu/Lót',
                 'vaccine'    => '💉 Vaccine',
             ];
             foreach ($tabs as $key => $label):
@@ -654,6 +655,82 @@ $gender_labels = ['male' => 'Trống', 'female' => 'Mái', 'mixed' => 'Hỗn h�
                      onclick="this.classList.toggle('max-h-48')">
                 <?php endif; ?>
                 <div class="text-xs text-gray-400 mt-2"><?= date('d/m/Y H:i', strtotime($hn['recorded_at'])) ?></div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- TAB: Trấu/Lót chuồng -->
+    <div id="tab_litter" class="hidden px-4 py-4">
+        <?php
+        $total_litter = array_sum(array_column($litters, 'quantity'));
+        ?>
+
+        <!-- Tổng lượng trấu -->
+        <?php if (!empty($litters)): ?>
+        <div class="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-4 mb-4 flex justify-between items-center">
+            <div class="text-sm text-amber-700 dark:text-amber-300 font-medium">Tổng trấu đã sử dụng</div>
+            <div class="text-lg font-bold text-amber-700 dark:text-amber-300">
+                <?= number_format($total_litter, 1) ?> bao
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Form thêm trấu -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-4">
+            <div class="text-sm font-semibold mb-3">➕ Ghi trấu/lót chuồng</div>
+            <form method="POST" action="/inventory/litter" class="space-y-3">
+                <input type="hidden" name="cycle_id" value="<?= e($cycle->id) ?>">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-400 mb-1 block">Số lượng</label>
+                        <input type="number" name="quantity" step="0.5" min="0.5" required
+                               placeholder="VD: 5"
+                               class="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 mb-1 block">Ngày</label>
+                        <input type="date" name="recorded_at" value="<?= date('Y-m-d') ?>"
+                               class="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400 mb-1 block">Ghi chú</label>
+                    <input type="text" name="note"
+                           placeholder="VD: Thay trấu mới..."
+                           class="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-xl transition-colors">
+                    Ghi nhận
+                </button>
+            </form>
+        </div>
+
+        <!-- Danh sách trấu -->
+        <?php if (empty($litters)): ?>
+        <div class="text-center py-8 text-gray-400 text-sm">
+            Chưa có bản ghi trấu/lót chuồng nào
+        </div>
+        <?php else: ?>
+        <div class="space-y-2">
+            <?php foreach ($litters as $lt): ?>
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 flex justify-between items-center">
+                <div>
+                    <div class="font-medium"><?= e($lt['quantity']) ?> bao</div>
+                    <div class="text-xs text-gray-400">
+                        <?= e($lt['item_name'] ?? 'Không rõ') ?> •
+                        <?= date('d/m/Y', strtotime($lt['recorded_at'])) ?>
+                        <?php if ($lt['note']): ?>
+                        • <?= e($lt['note']) ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <form method="POST" action="/cycles/<?= e($cycle->id) ?>/litters/<?= $lt['id'] ?>/delete"
+                      onsubmit="return confirm('Xóa bản ghi này?')">
+                    <input type="hidden" name="redirect" value="/cycles/<?= e($cycle->id) ?>?tab=litter#litter">
+                    <button class="text-red-400 text-xs hover:underline">Xóa</button>
+                </form>
             </div>
             <?php endforeach; ?>
         </div>

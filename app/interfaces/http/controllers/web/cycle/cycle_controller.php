@@ -154,6 +154,17 @@ class CycleController
         $stmt->execute([':id' => $cycle->id]);
         $expenses = $stmt->fetchAll();
 
+        // Litters
+        $stmt = $this->pdo->prepare("
+            SELECT l.*, ii.name as item_name
+            FROM care_litters l
+            LEFT JOIN inventory_items ii ON ii.id = l.item_id
+            WHERE l.cycle_id = :id
+            ORDER BY l.recorded_at DESC
+        ");
+        $stmt->execute([':id' => $cycle->id]);
+        $litters = $stmt->fetchAll();
+
         // Health notes
         $stmt = $this->pdo->prepare("SELECT * FROM health_notes WHERE cycle_id=:id ORDER BY recorded_at DESC");
         $stmt->execute([':id' => $cycle->id]);
@@ -551,6 +562,39 @@ class CycleController
         }
 
         header('Location: /cycles/' . $cycle_id . '?tab=vaccine&msg=' . urlencode($msg) . '#vaccine');
+        exit;
+    }
+
+
+    // GET /cycles/{id}/litters
+    public function list_litters(array $vars): void
+    {
+        $cycle_id = (int)$vars['id'];
+        $stmt = $this->pdo->prepare("
+            SELECT l.*, ii.name as item_name
+            FROM care_litters l
+            LEFT JOIN inventory_items ii ON ii.id = l.item_id
+            WHERE l.cycle_id = :id
+            ORDER BY l.recorded_at DESC
+        ");
+        $stmt->execute([':id' => $cycle_id]);
+        $litters = $stmt->fetchAll();
+
+        header('Content-Type: application/json');
+        echo json_encode($litters);
+    }
+
+
+    // POST /cycles/{id}/litters/{litter_id}/delete
+    public function delete_litter(array $vars): void
+    {
+        $cycle_id = (int)$vars['id'];
+        $litter_id = (int)$vars['litter_id'];
+
+        $stmt = $this->pdo->prepare("DELETE FROM care_litters WHERE id = :id AND cycle_id = :cycle_id");
+        $stmt->execute([':id' => $litter_id, ':cycle_id' => $cycle_id]);
+
+        header('Location: /cycles/' . $cycle_id . '?tab=litter#litter');
         exit;
     }
 

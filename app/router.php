@@ -290,6 +290,11 @@ $r->addRoute('POST', '/inventory/sell',                     [InventoryController
 $r->addRoute('POST', '/inventory/adjust',                   [InventoryController::class, 'store_adjust']);
 $r->addRoute('POST', '/inventory/assets/{id:\d+}/status',   [InventoryController::class, 'update_asset_status']);
 $r->addRoute('POST', '/inventory/litter',                   [InventoryController::class, 'store_litter']);
+
+// Litter routes - list & delete by cycle
+$r->addRoute('GET',  '/cycles/{id:\d+}/litters',            [CycleController::class, 'list_litters']);
+$r->addRoute('POST', '/cycles/{id:\d+}/litters/{litter_id:\d+}/delete', [CycleController::class, 'delete_litter']);
+
 $r->addRoute('GET',  '/inventory/items/{id:\d+}/stock',     [InventoryController::class, 'get_item_stock']);
 $r->addRoute('POST', '/inventory/items',                    [InventoryController::class, 'store_item']);
 $r->addRoute('GET',  '/inventory/items/{id:\d+}',                  [InventoryEditController::class, 'getItem']);
