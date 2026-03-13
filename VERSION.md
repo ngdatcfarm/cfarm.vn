@@ -1,5 +1,17 @@
 # Version History - cfarm.vn
 
+## [v0.1.3] - 2026-03-13
+### Fixed
+- **Root cause found!** Inventory delete not working
+  - list_items was showing ALL items including inactive ones
+  - When deleteItem sets status='inactive', item still displays in list
+  - Added status='active' filter to list_items query
+
+### Changed
+- 1 file changed
+
+---
+
 ## [v0.1.2] - 2026-03-13
 ### Fixed
 - Inventory delete item - improved logic
