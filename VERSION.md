@@ -1,5 +1,19 @@
 # Version History - cfarm.vn
 
+## [v0.1.2] - 2026-03-13
+### Fixed
+- Inventory delete item - improved logic
+  - Check if item exists before deleting
+  - Return success if item already inactive
+  - Fix UPDATE: only update if status='active'
+  - Verify rowCount() to ensure update affected a row
+  - Remove debug logging
+
+### Changed
+- 2 files changed
+
+---
+
 ## [v0.1.1] - 2026-03-13
 ### Fixed
 - Inventory delete item functionality
