@@ -59,18 +59,35 @@ class CareController
     public function store_feed(array $vars): void
     {
         try {
+            // KIỂM TRA: Cycle phải có feed_program đang active
+            $cycle_id = (int)$_POST['cycle_id'];
+            $stmt = $this->pdo->prepare("
+                SELECT COUNT(*) FROM cycle_feed_programs
+                WHERE cycle_id = :cycle_id AND end_date IS NULL
+            ");
+            $stmt->execute([':cycle_id' => $cycle_id]);
+            if ((int)$stmt->fetchColumn() === 0) {
+                throw new \InvalidArgumentException('Cycle chưa cài đặt hãng cám. Vui lòng cài đặt trước khi ghi cho ăn.');
+            }
+
             $usecase = new RecordFeedUsecase(
                 $this->care_repository,
                 new FeedTypeRepository($this->pdo),
                 $this->cycle_repository
             );
-            $id = $usecase->execute((int)$_POST['cycle_id'], $_POST);
+            $id = $usecase->execute($cycle_id, $_POST);
             $this->trigger_snapshot((int)$_POST['cycle_id'], $_POST['recorded_at'] ?? null);
             // AUTO DEDUCT INVENTORY
             try {
                 $stock_svc = new \App\Domains\Inventory\Services\InventoryStockService($this->pdo);
                 $stock_svc->deduct_feed($id, (int)$_POST['cycle_id'], (int)$_POST['feed_type_id'], (float)$_POST['bags']);
-            } catch (\Throwable $e) { error_log("Inventory deduct_feed: ".$e->getMessage()); }
+            } catch (\InvalidArgumentException $e) {
+                // Đã ghi care_feeds nhưng không trừ được inventory - báo lỗi cho user
+                $this->json(false, $e->getMessage());
+                return;
+            } catch (\Throwable $e) {
+                error_log("Inventory deduct_feed: ".$e->getMessage());
+            }
             $this->json(true, 'Đã ghi chép cho ăn', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {
             $this->json(false, $e->getMessage());
@@ -98,6 +115,9 @@ class CareController
             try {
                 $stock_svc = new \App\Domains\Inventory\Services\InventoryStockService($this->pdo);
                 $stock_svc->deduct_medication($id, (int)$_POST['cycle_id'], !empty($_POST['medication_id']) ? (int)$_POST['medication_id'] : null, (float)$_POST['dosage'], $_POST['unit'] ?? '');
+            } catch (\InvalidArgumentException $e) {
+                $this->json(false, $e->getMessage());
+                return;
             } catch (\Throwable $e) { error_log("Inventory deduct_med: ".$e->getMessage()); }
             $this->json(true, 'Đã ghi chép thuốc', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {

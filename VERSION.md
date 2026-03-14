@@ -1,5 +1,32 @@
 # Version History - cfarm.vn
 
+## [v0.1.4] - 2026-03-14
+### Added
+- Feed Brand Auto-Generate feature
+  - When creating feed_brand -> automatically create feed_types (3 stages: chick/grower/adult)
+  - Automatically create inventory_items for each feed_type
+  - Add column `ref_feed_type_id` to inventory_items table
+  - Created FeedBrandService.php
+
+### Fixed
+- **InventoryStockService** - Stock validation before deducting
+  - Check stock before deducting from inventory
+  - Error message: "Tồn kho không đủ! Hiện có: X bao, cần: Y bao"
+  - Priority lookup via ref_feed_type_id (more accurate than ref_feed_brand_id)
+
+### Changed
+- **CareController** - Added validation: cycle must have feed_program before recording care_feeds
+- **EventController** - Added feed_inventory_items loading
+- **event_create.php** - Added inventory dropdown showing current stock
+
+### Database Changes
+- See SQLADD.md for SQL commands
+
+### Changed
+- 5 files changed
+
+---
+
 ## [v0.1.3] - 2026-03-13
 ### Fixed
 - **Root cause found!** Inventory delete not working

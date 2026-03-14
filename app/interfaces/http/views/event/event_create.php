@@ -63,6 +63,20 @@ function render_session_cards(
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <?php if (!empty($feed_inventory_items)): ?>
+                <div>
+                    <label class="block text-xs font-medium mb-1">Kho vật tư (tồn kho)</label>
+                    <select id="feed_inventory_item_<?= $s ?>"
+                            class="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">— Xem tồn kho —</option>
+                        <?php foreach ($feed_inventory_items as $inv): ?>
+                        <option value="<?= e($inv['id']) ?>" data-qty="<?= e($inv['quantity'] ?? 0) ?>">
+                            <?= e($inv['brand_name'] ?? $inv['name']) ?><?= !empty($inv['feed_type_code']) ? ' · ' . e($inv['feed_type_code']) : '' ?> — Tồn: <?= number_format($inv['quantity'] ?? 0, 1) ?> <?= e($inv['unit'] ?? 'bao') ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
                 <div>
                     <label class="block text-xs font-medium mb-1">Số bao <span class="text-red-500">*</span></label>
                     <div class="flex gap-1 mb-1.5 flex-wrap">

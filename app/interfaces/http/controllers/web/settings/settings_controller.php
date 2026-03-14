@@ -11,6 +11,7 @@ namespace App\Interfaces\Http\Controllers\Web\Settings;
 
 use App\Domains\FeedBrand\Entities\FeedBrand;
 use App\Domains\FeedBrand\Entities\FeedType;
+use App\Domains\FeedBrand\Services\FeedBrandService;
 use App\Infrastructure\Persistence\Mysql\Repositories\FeedBrandRepository;
 use App\Infrastructure\Persistence\Mysql\Repositories\FeedTypeRepository;
 use InvalidArgumentException;
@@ -20,11 +21,13 @@ class SettingsController
 {
     private FeedBrandRepository $brand_repo;
     private FeedTypeRepository  $type_repo;
+    private FeedBrandService   $feed_brand_service;
 
     public function __construct(private PDO $pdo)
     {
         $this->brand_repo = new FeedBrandRepository($pdo);
         $this->type_repo  = new FeedTypeRepository($pdo);
+        $this->feed_brand_service = new FeedBrandService($pdo);
     }
 
     // GET /settings
@@ -60,7 +63,8 @@ class SettingsController
                 kg_per_bag: (float) $_POST['kg_per_bag'],
                 note:       !empty($_POST['note']) ? trim($_POST['note']) : null,
             );
-            $this->brand_repo->create($brand);
+            // Sử dụng service để tự động sinh feed_types + inventory_items
+            $this->feed_brand_service->createWithAutoGenerate($brand, (float) $_POST['kg_per_bag']);
             require view_path('settings/settings_menu.php');
         } catch (InvalidArgumentException $e) {
             $error = $e->getMessage();

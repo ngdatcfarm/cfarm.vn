@@ -78,8 +78,9 @@ class EventController
         unset($w);
 
         // feed types của cycle
-        $feed_types       = [];
-        $medications_list = [];
+        $feed_types            = [];
+        $feed_inventory_items = []; // inventory_items có tồn kho (feed)
+        $medications_list     = [];
         if ($cycle) {
             $stmt = $this->pdo->prepare("
                 SELECT ft.*, fb.name AS brand_name, fb.kg_per_bag
@@ -93,6 +94,22 @@ class EventController
             ");
             $stmt->execute([':cycle_id' => $cycle_id]);
             $feed_types = $stmt->fetchAll();
+
+            // Lấy inventory_items có tồn kho cho feed (production/feed)
+            // Ưu tiên lấy theo ref_feed_type_id (chính xác hơn)
+            $inv_stmt = $this->pdo->prepare("
+                SELECT ii.*, ft.code AS feed_type_code, fb.name AS brand_name
+                FROM inventory_items ii
+                LEFT JOIN feed_types ft ON ft.id = ii.ref_feed_type_id
+                LEFT JOIN feed_brands fb ON fb.id = COALESCE(ii.ref_feed_brand_id, ft.feed_brand_id)
+                WHERE ii.category = 'production'
+                  AND ii.sub_category = 'feed'
+                  AND ii.status = 'active'
+                  AND (ii.quantity IS NULL OR ii.quantity > 0)
+                ORDER BY fb.name ASC, ft.code ASC
+            ");
+            $inv_stmt->execute();
+            $feed_inventory_items = $inv_stmt->fetchAll();
 
             $med_stmt = $this->pdo->query("SELECT * FROM medications WHERE status='active' ORDER BY name ASC");
             $medications_list = $med_stmt->fetchAll();

@@ -1,5 +1,28 @@
 # WORK LOG – app.cfarm.vn
 
+## 2026-03-14
+- Thiết kế lại luồng dữ liệu Feed (feed_brands → feed_types → inventory_items → care_feeds)
+- Tạo FeedBrandService.php để auto-generate feed_types + inventory_items khi tạo feed_brand
+  - Tự động tạo 3 feed_types: chick, grower, adult cho mỗi brand
+  - Tự động tạo inventory_items cho mỗi feed_type
+- Fix InventoryStockService.php - thêm kiểm tra tồn kho trước khi trừ
+  - Validate: "Tồn kho không đủ! Hiện có: X bao, cần: Y bao"
+  - Ưu tiên lookup theo ref_feed_type_id (chính xác hơn ref_feed_brand_id)
+- Fix CareController - validate cycle phải có feed_program mới được ghi care_feeds
+  - Check: SELECT COUNT(*) FROM cycle_feed_programs WHERE cycle_id = ? AND end_date IS NULL
+- Thêm dropdown inventory_items trong event_create.php
+  - Hiển thị tồn kho hiện tại để user tiện theo dõi
+- Cập nhật SQLADD.md - lưu SQL commands cần chạy trên cloud
+
+### Database changes cần chạy trên cloud:
+```sql
+ALTER TABLE inventory_items
+ADD COLUMN ref_feed_type_id INT NULL AFTER ref_feed_brand_id,
+ADD INDEX idx_ref_feed_type_id (ref_feed_type_id);
+```
+
+---
+
 ## 2026-03-13
 - Tổng hợp tất cả router thành file `Docs/ROUTERS.md`
 - Liệt kê ~100+ routes theo từng domain: Auth, Home, Barn, Cycle, Care, Weight, ENV, Vaccine, Health, Inventory, Report, Export, Event, Expense, Push, IoT, Settings
@@ -42,6 +65,7 @@ Fail sớm – fail rõ – không đoán hộ thiết bị
 ☐ 1. Payload có đầy đủ trường tối thiểu?
 
 BẮT BUỘC:
+
 
 node_code
 
