@@ -12,6 +12,10 @@
   - Check: SELECT COUNT(*) FROM cycle_feed_programs WHERE cycle_id = ? AND end_date IS NULL
 - Thêm dropdown inventory_items trong event_create.php
   - Hiển thị tồn kho hiện tại để user tiện theo dõi
+- Thêm tính năng Sync Kho trong Settings → Hãng cám
+  - Nút "🔄 Sync Kho" để đồng bộ inventory_items từ feed_types
+  - Method syncInventoryFromFeedTypes() trong FeedBrandService
+  - Tự động tạo mới hoặc update inventory_items khi feed_types thay đổi
 - Cập nhật SQLADD.md - lưu SQL commands cần chạy trên cloud
 
 ### Database changes cần chạy trên cloud:

@@ -19,13 +19,15 @@
 - **EventController** - Added feed_inventory_items loading
 - **event_create.php** - Added inventory dropdown showing current stock
 - **SQLADD.md** - Fixed: inventory_items must link to feed_types (not feed_brands), include code in name
+- **FeedBrandService** - Added syncInventoryFromFeedTypes() method
+- **feed_brands.php** - Added "🔄 Sync Kho" button
 
 ### Database Changes
 - See SQLADD.md for SQL commands
 - **Important**: inventory_items name format: "CODE - Brand - Type Name"
 
 ### Changed
-- 6 files changed
+- 10 files changed
 
 ---
 
