@@ -16,10 +16,27 @@
 
 ### Database changes cần chạy trên cloud:
 ```sql
+-- 1. Thêm cột ref_feed_type_id
 ALTER TABLE inventory_items
 ADD COLUMN ref_feed_type_id INT NULL AFTER ref_feed_brand_id,
 ADD INDEX idx_ref_feed_type_id (ref_feed_type_id);
+
+-- 2. Xóa inventory_items feed cũ và tạo mới từ feed_types
+DELETE FROM inventory_items WHERE category = 'production' AND sub_category = 'feed';
+
+INSERT INTO inventory_items (name, category, sub_category, unit, ref_feed_brand_id, ref_feed_type_id, status)
+SELECT
+    CONCAT(ft.code, ' - ', fb.name, ' - ', ft.name) AS name,
+    'production', 'feed', 'bao',
+    ft.feed_brand_id, ft.id, 'active'
+FROM feed_types ft
+JOIN feed_brands fb ON ft.feed_brand_id = fb.id
+WHERE ft.status = 'active';
 ```
+
+**Lưu ý quan trọng:**
+- inventory_items PHẢI liên kết với feed_types (từng loại cám theo giai đoạn), KHÔNG phải feed_brands
+- Name format: "CODE - Brand - Type Name" (ví dụ: "CCCH01 - Cám Con Cò - Gà con")
 
 ---
 

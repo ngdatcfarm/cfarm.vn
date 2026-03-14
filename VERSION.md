@@ -18,13 +18,14 @@
 - **CareController** - Added validation: cycle must have feed_program before recording care_feeds
 - **EventController** - Added feed_inventory_items loading
 - **event_create.php** - Added inventory dropdown showing current stock
+- **SQLADD.md** - Fixed: inventory_items must link to feed_types (not feed_brands), include code in name
 
 ### Database Changes
 - See SQLADD.md for SQL commands
-- **Important**: Chạy SQL để tạo inventory_items từ feed_types (không phải feed_brands)
+- **Important**: inventory_items name format: "CODE - Brand - Type Name"
 
 ### Changed
-- 5 files changed
+- 6 files changed
 
 ---
 
