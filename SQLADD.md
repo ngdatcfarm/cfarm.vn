@@ -50,3 +50,26 @@ WHERE id NOT IN (
     ) AS keep
 ) AND category = 'production' AND sub_category = 'feed';
 ```
+
+### Fix: Re-create inventory_items (với FK constraint)
+
+```sql
+-- Disable FK checks
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Xóa tất cả feed trong inventory
+DELETE FROM inventory_items WHERE category = 'production' AND sub_category = 'feed';
+
+-- Re-sync từ feed_types
+INSERT INTO inventory_items (name, category, sub_category, unit, ref_feed_brand_id, ref_feed_type_id, status)
+SELECT
+    CONCAT(ft.code, ' - ', fb.name, ' - ', ft.name) AS name,
+    'production', 'feed', 'bao',
+    ft.feed_brand_id, ft.id, 'active'
+FROM feed_types ft
+JOIN feed_brands fb ON ft.feed_brand_id = fb.id
+WHERE ft.status = 'active';
+
+-- Re-enable FK checks
+SET FOREIGN_KEY_CHECKS = 1;
+```
