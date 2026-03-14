@@ -16,6 +16,11 @@
   - Nút "🔄 Sync Kho" để đồng bộ inventory_items từ feed_types
   - Method syncInventoryFromFeedTypes() trong FeedBrandService
   - Tự động tạo mới hoặc update inventory_items khi feed_types thay đổi
+- Fix inventory/production bị double items
+  - Thêm GROUP BY ii.id trong InventoryRepository để ngăn duplicate từ JOIN
+  - Fix FK constraint khi xóa inventory_items feed
+    - Phải xóa các bảng liên quan trước: inventory_purchases, inventory_transactions, inventory_stock, inventory_sales
+    - Dùng SET FOREIGN_KEY_CHECKS = 0 trước khi xóa
 - Cập nhật SQLADD.md - lưu SQL commands cần chạy trên cloud
 
 ### Database changes cần chạy trên cloud:
