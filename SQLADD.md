@@ -33,3 +33,20 @@ FROM feed_types ft
 JOIN feed_brands fb ON ft.feed_brand_id = fb.id
 WHERE ft.status = 'active';
 ```
+
+### Fix: Cleanup duplicate inventory_items (nếu có)
+
+Nếu bị double items, chạy SQL này để xóa duplicates:
+
+```sql
+-- Tìm và xóa duplicate inventory_items (giữ lại bản gới đầu tiên)
+DELETE FROM inventory_items
+WHERE id NOT IN (
+    SELECT * FROM (
+        SELECT MIN(id)
+        FROM inventory_items
+        WHERE category = 'production' AND sub_category = 'feed'
+        GROUP BY ref_feed_type_id, ref_feed_brand_id
+    ) AS keep
+) AND category = 'production' AND sub_category = 'feed';
+```

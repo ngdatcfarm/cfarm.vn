@@ -62,8 +62,10 @@ class InventoryRepository
             $params[':cat'] = $category;
         }
         $where = "WHERE " . implode(" AND ", $clauses);
+        // Use GROUP BY ii.id to prevent duplicates from JOINs
         return $this->fetch_all("
-            SELECT DISTINCT ii.*, s.name AS supplier_name,
+            SELECT ii.*,
+                   s.name AS supplier_name,
                    m.name AS medication_name,
                    fb.name AS feed_brand_name,
                    ft.code AS feed_type_code
@@ -72,7 +74,9 @@ class InventoryRepository
             LEFT JOIN medications m     ON ii.ref_medication_id = m.id
             LEFT JOIN feed_brands fb    ON ii.ref_feed_brand_id = fb.id
             LEFT JOIN feed_types ft     ON ii.ref_feed_type_id  = ft.id
-            {$where} ORDER BY ii.category, ii.sub_category, ii.name
+            {$where}
+            GROUP BY ii.id
+            ORDER BY ii.category, ii.sub_category, ii.name
         ", $params);
     }
     public function find_item(int $id): ?array
