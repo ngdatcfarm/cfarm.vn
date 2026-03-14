@@ -22,7 +22,7 @@ WHERE category = 'production' AND sub_category = 'feed';
 -- 2. Tạo mới inventory_items từ feed_types (mỗi feed_type = 1 inventory_item)
 INSERT INTO inventory_items (name, category, sub_category, unit, ref_feed_brand_id, ref_feed_type_id, status)
 SELECT
-    CONCAT(fb.name, ' - ', ft.name) AS name,
+    CONCAT(ft.code, ' - ', fb.name, ' - ', ft.name) AS name,
     'production' AS category,
     'feed' AS sub_category,
     'bao' AS unit,
