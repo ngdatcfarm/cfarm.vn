@@ -5,6 +5,7 @@
 ### Create table cycle_feed_program_items
 
 ```sql
+-- Bỏ FK tạm thời nếu gặp lỗi kiểu dữ liệu
 CREATE TABLE IF NOT EXISTS cycle_feed_program_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     cycle_feed_program_id INT NOT NULL,
@@ -13,9 +14,7 @@ CREATE TABLE IF NOT EXISTS cycle_feed_program_items (
     status ENUM('active','inactive') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_cfpi_program (cycle_feed_program_id),
-    INDEX idx_cfpi_stage (stage),
-    FOREIGN KEY (cycle_feed_program_id) REFERENCES cycle_feed_programs(id) ON DELETE CASCADE,
-    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
+    INDEX idx_cfpi_stage (stage)
 );
 ```
 
