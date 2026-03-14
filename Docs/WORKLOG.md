@@ -21,7 +21,21 @@
   - Fix FK constraint khi xóa inventory_items feed
     - Phải xóa các bảng liên quan trước: inventory_purchases, inventory_transactions, inventory_stock, inventory_sales
     - Dùng SET FOREIGN_KEY_CHECKS = 0 trước khi xóa
+- Fix EventController - sử dụng inventory_stock table cho quantity (không có cột quantity trong inventory_items)
 - Cập nhật SQLADD.md - lưu SQL commands cần chạy trên cloud
+
+### Bước 5: Cycle chọn inventory_items theo giai đoạn (2026-03-14)
+- Tạo bảng cycle_feed_program_items
+  - Link cycle_feed_programs → inventory_items theo stage (chick/grower/adult)
+  - Cho phép cycle chọn mã cám cụ thể cho từng giai đoạn
+- Cập nhật cycle_feed_program.php
+  - Form chọn inventory_items cho từng giai đoạn
+  - Hiển thị tồn kho của từng mã cám
+- Cập nhật cycle_controller.php
+  - feed_program_form: load inventory_items theo stage
+  - feed_program_store: lưu inventory_items đã chọn
+- Cập nhật event_controller
+  - Ưu tiên lấy inventory_items từ cycle_feed_program_items nếu có
 
 ### Database changes cần chạy trên cloud:
 ```sql
