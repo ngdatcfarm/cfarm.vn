@@ -96,16 +96,20 @@ class EventController
             $feed_types = $stmt->fetchAll();
 
             // Lấy inventory_items có tồn kho cho feed (production/feed)
-            // Ưu tiên lấy theo ref_feed_type_id (chính xác hơn)
+            // Check stock từ inventory_stock table (không có cột quantity trong inventory_items)
             $inv_stmt = $this->pdo->prepare("
-                SELECT ii.*, ft.code AS feed_type_code, fb.name AS brand_name
+                SELECT ii.*,
+                       ft.code AS feed_type_code,
+                       fb.name AS brand_name,
+                       COALESCE(s.quantity, 0) AS quantity
                 FROM inventory_items ii
                 LEFT JOIN feed_types ft ON ft.id = ii.ref_feed_type_id
                 LEFT JOIN feed_brands fb ON fb.id = COALESCE(ii.ref_feed_brand_id, ft.feed_brand_id)
+                LEFT JOIN inventory_stock s ON s.item_id = ii.id AND s.barn_id IS NULL
                 WHERE ii.category = 'production'
                   AND ii.sub_category = 'feed'
                   AND ii.status = 'active'
-                  AND (ii.quantity IS NULL OR ii.quantity > 0)
+                  AND (s.quantity IS NULL OR s.quantity > 0)
                 ORDER BY fb.name ASC, ft.code ASC
             ");
             $inv_stmt->execute();
