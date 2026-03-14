@@ -285,6 +285,7 @@ use App\Interfaces\Http\Controllers\Web\Inventory\SupplierController;
 $r->addRoute('GET',  '/inventory',                          [InventoryController::class, 'index']);
 $r->addRoute('GET',  '/inventory/production',               [InventoryController::class, 'production']);
 $r->addRoute('GET',  '/inventory/consumable',               [InventoryController::class, 'consumable']);
+$r->addRoute('GET',  '/inventory/transactions',             [InventoryController::class, 'transactions']);
 $r->addRoute('POST', '/inventory/purchase',                 [InventoryController::class, 'store_purchase']);
 $r->addRoute('POST', '/inventory/transfer',                 [InventoryController::class, 'store_transfer']);
 $r->addRoute('POST', '/inventory/sell',                     [InventoryController::class, 'store_sale']);

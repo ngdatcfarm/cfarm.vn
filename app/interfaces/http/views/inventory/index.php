@@ -34,6 +34,10 @@ ob_start();
             <span class="text-2xl">🔧</span>
             <div><div class="font-semibold text-sm">Vật tư tiêu hao</div><div class="text-xs text-indigo-100">ESP32 · Cảm biến · Đèn</div></div>
         </a>
+        <a href="/inventory/transactions" class="bg-blue-600 text-white rounded-2xl p-4 flex items-center gap-3">
+            <span class="text-2xl">📋</span>
+            <div><div class="font-semibold text-sm">Lịch sử giao dịch</div><div class="text-xs text-blue-100">Nhập · Xuất · Điều chỉnh</div></div>
+        </a>
     </div>
     <?php if (!empty($low_stock)): ?>
     <div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-2xl p-4">

@@ -82,6 +82,49 @@ class InventoryController
         require view_path('inventory/consumable.php');
     }
 
+    public function transactions(array $vars): void
+    {
+        $filter_type = $_GET['type'] ?? 'all';
+        $filter_item = $_GET['item'] ?? '';
+        $date_from = $_GET['date_from'] ?? date('Y-m-01');
+        $date_to = $_GET['date_to'] ?? date('Y-m-d');
+
+        // Build query
+        $where_clauses = ["t.recorded_at >= :date_from", "t.recorded_at < DATE_ADD(:date_to, INTERVAL 1 DAY)"];
+        $params = [':date_from' => $date_from, ':date_to' => $date_to];
+
+        if ($filter_type !== 'all' && !empty($filter_type)) {
+            $where_clauses[] = "t.txn_type = :type";
+            $params[':type'] = $filter_type;
+        }
+
+        if (!empty($filter_item)) {
+            $where_clauses[] = "t.item_id = :item_id";
+            $params[':item_id'] = (int)$filter_item;
+        }
+
+        $where = "WHERE " . implode(" AND ", $where_clauses);
+
+        $txns = $this->repo->fetch_all("
+            SELECT t.*, ii.name AS item_name, ii.unit,
+                   b_from.name AS from_barn_name, b_to.name AS to_barn_name
+            FROM inventory_transactions t
+            JOIN inventory_items ii ON t.item_id = ii.id
+            LEFT JOIN barns b_from ON t.from_barn_id = b_from.id
+            LEFT JOIN barns b_to ON t.to_barn_id = b_to.id
+            {$where}
+            ORDER BY t.recorded_at DESC
+            LIMIT 200
+        ", $params);
+
+        // Get all items for filter dropdown
+        $items = $this->repo->list_items();
+
+        $title = 'Lịch Sử Giao Dịch Kho';
+        extract(compact('txns','items','filter_type','filter_item','date_from','date_to'));
+        require view_path('inventory/transactions.php');
+    }
+
     public function store_purchase(array $vars): void
     {
         try {
