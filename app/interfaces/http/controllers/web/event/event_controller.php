@@ -212,17 +212,25 @@ class EventController
         $date_value = $date;
 
         // Health notes + vaccine schedules
-        $stmt = $this->pdo->prepare("SELECT * FROM health_notes WHERE cycle_id=:id ORDER BY recorded_at DESC");
-        $stmt->execute([':id' => $cycle->id]);
-        $health_notes = $stmt->fetchAll();
+        $health_notes = $cycle ? $this->pdo->prepare("SELECT * FROM health_notes WHERE cycle_id=:id ORDER BY recorded_at DESC") : null;
+        if ($health_notes) {
+            $health_notes->execute([':id' => $cycle->id]);
+            $health_notes = $health_notes->fetchAll();
+        } else {
+            $health_notes = [];
+        }
 
-        $stmt = $this->pdo->prepare("SELECT * FROM vaccine_schedules WHERE cycle_id=:id ORDER BY scheduled_date ASC");
-        $stmt->execute([':id' => $cycle->id]);
-        $vaccine_schedules = $stmt->fetchAll();
+        $vaccine_schedules = $cycle ? $this->pdo->prepare("SELECT * FROM vaccine_schedules WHERE cycle_id=:id ORDER BY scheduled_date ASC") : null;
+        if ($vaccine_schedules) {
+            $vaccine_schedules->execute([':id' => $cycle->id]);
+            $vaccine_schedules = $vaccine_schedules->fetchAll();
+        } else {
+            $vaccine_schedules = [];
+        }
 
         // Vaccine program items cho dropdown
         $vaccine_program_items = [];
-        if ($cycle->vaccine_program_id) {
+        if ($cycle && $cycle->vaccine_program_id) {
             $stmt = $this->pdo->prepare("
                 SELECT vpi.*, vb.name as brand_name
                 FROM vaccine_program_items vpi

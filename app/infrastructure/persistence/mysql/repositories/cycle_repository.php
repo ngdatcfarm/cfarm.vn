@@ -83,14 +83,14 @@ class CycleRepository implements CycleRepositoryInterface
                 initial_quantity, male_quantity, female_quantity,
                 purchase_price, current_quantity,
                 start_date, expected_end_date,
-                stage, feed_waste_pct, status,
+                stage, status,
                 season, flock_source
             ) VALUES (
                 :barn_id, :parent_cycle_id, :split_date, :code, :breed,
                 :initial_quantity, :male_quantity, :female_quantity,
                 :purchase_price, :current_quantity,
                 :start_date, :expected_end_date,
-                :stage, :feed_waste_pct, 'active',
+                :stage, 'active',
                 :season, :flock_source
             )
         ");
@@ -109,6 +109,8 @@ class CycleRepository implements CycleRepositoryInterface
             ':start_date'        => $cycle->start_date,
             ':expected_end_date' => $cycle->expected_end_date,
             ':stage'             => $cycle->stage,
+            ':season'            => $cycle->season,
+            ':flock_source'      => $cycle->flock_source,
         ]);
 
         return (int) $this->pdo->lastInsertId();

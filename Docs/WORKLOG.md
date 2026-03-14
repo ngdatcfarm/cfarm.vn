@@ -1,5 +1,16 @@
 # WORK LOG – app.cfarm.vn
 
+## 2026-03-14 (tiếp)
+- Tạo CareEditPermission service
+  - File: app/domains/care/services/care_edit_permission.php
+  - Kiểm tra quyền sửa (3 ngày) / xóa (2 ngày) event care
+  - Hỗ trợ override password cho admin
+- Fix lỗi xóa event trả về HTML thay vì JSON
+  - Nguyên nhân: class CareEditPermission chưa được autoload
+  - Giải pháp: chạy composer dump-autoload trên server
+
+---
+
 ## 2026-03-14
 - Thiết kế lại luồng dữ liệu Feed (feed_brands → feed_types → inventory_items → care_feeds)
 - Tạo FeedBrandService.php để auto-generate feed_types + inventory_items khi tạo feed_brand

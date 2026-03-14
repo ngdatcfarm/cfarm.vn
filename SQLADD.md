@@ -1,5 +1,102 @@
 # SQL Changes for v0.1.x
 
+## CLEAN ALL DATA (Keep Users)
+
+Xóa tất cả dữ liệu trong database, giữ lại bảng users:
+
+```sql
+-- Bắt buộc chạy từng bước một!
+
+-- Bước 1: Tắt kiểm tra FK
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Bước 2: Xóa TẤT CẢ các bảng có FK đến cycles TRƯỚC
+DELETE FROM weight_samples;
+DELETE FROM weight_sessions;
+DELETE FROM feed_trough_checks;
+DELETE FROM env_readings;
+DELETE FROM device_commands;
+DELETE FROM care_sales;
+DELETE FROM care_medications;
+DELETE FROM care_litters;
+DELETE FROM care_feeds;
+DELETE FROM care_deaths;
+DELETE FROM care_expenses;
+DELETE FROM cycle_splits;
+DELETE FROM cycle_feed_stages;
+DELETE FROM cycle_feed_program_items;
+DELETE FROM cycle_daily_snapshots;
+DELETE FROM cycle_feed_programs;
+
+-- Bước 3: Bây giờ mới xóa cycles
+DELETE FROM cycles;
+
+-- Bước 4: Xóa các bảng inventory
+DELETE FROM inventory_consumable_assets;
+DELETE FROM inventory_transactions;
+DELETE FROM inventory_sales;
+DELETE FROM inventory_stock;
+DELETE FROM inventory_purchases;
+DELETE FROM inventory_items;
+
+-- Bước 5: Xóa các bảng master còn lại
+DELETE FROM feed_types;
+DELETE FROM feed_brands;
+DELETE FROM medications;
+DELETE FROM vaccine_schedules;
+DELETE FROM vaccine_program_items;
+DELETE FROM vaccine_brands;
+DELETE FROM vaccine_programs;
+DELETE FROM health_notes;
+DELETE FROM devices;
+DELETE FROM device_types;
+DELETE FROM device_channels;
+DELETE FROM device_states;
+DELETE FROM device_state_log;
+DELETE FROM curtain_configs;
+DELETE FROM sensor_readings;
+DELETE FROM barns;
+DELETE FROM suppliers;
+DELETE FROM push_notifications_log;
+DELETE FROM notification_settings;
+
+-- Bước 6: Bật lại kiểm tra FK
+SET FOREIGN_KEY_CHECKS = 1;
+```
+
+**Thứ tự quan trọng:** Phải xóa tất cả bảng có FK đến `cycles` TRƯỚC khi xóa `cycles`:
+
+- weight_sessions
+- feed_trough_checks
+- env_readings
+- device_commands
+- care_sales, care_medications, care_litters, care_feeds, care_deaths, care_expenses
+- cycle_splits, cycle_feed_stages, cycle_feed_program_items, cycle_feed_programs
+
+**Nếu vẫn lỗi**, chạy từng dòng một để xem dòng nào lỗi:
+
+Sau khi clean, cần thêm lại dữ liệu mẫu:
+
+```sql
+-- 1. Thêm barn mẫu
+INSERT INTO barns (id, number, name, length_m, width_m, height_m, status, note, created_at) VALUES
+(1, 1, 'Chuồng 1', 60, 12, 3.5, 'active', 'Chuồng nuôi gà thịt', NOW()),
+(2, 2, 'Chuồng 2', 60, 12, 3.5, 'active', 'Chuồng nuôi gà thịt', NOW());
+
+-- 2. Thêm feed_brands
+INSERT INTO feed_brands (id, name, kg_per_bag, status, note, created_at) VALUES
+(1, 'Cám Con Cò', 25, 'active', 'Cám Con Cò', NOW()),
+(2, 'Cám Đại Bàng', 25, 'active', 'Cám Đại Bàng', NOW());
+
+-- 3. Thêm feed_types (sẽ tự tạo inventory_items)
+-- Sẽ được tạo qua FeedBrandService khi tạo feed_brand mới
+
+-- 4. Thêm inventory_items cho trấu (litter)
+INSERT INTO inventory_items (name, category, sub_category, unit, status) VALUES
+('Trấu rơm', 'production', 'litter', 'bao', 'active'),
+('Mùn cưa', 'production', 'litter', 'bao', 'active');
+```
+
 ## v0.1.5 - Cycle Feed Program Items (2026-03-14)
 
 ### Create table cycle_feed_program_items

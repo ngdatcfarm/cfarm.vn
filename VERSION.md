@@ -1,5 +1,22 @@
 # Version History - cfarm.vn
 
+## [v0.1.6] - 2026-03-14
+### Added
+- CareEditPermission service
+  - New file: app/domains/care/services/care_edit_permission.php
+  - Check if care record can be edited (3 days) or deleted (2 days)
+  - Override password feature for admin
+
+### Fixed
+- Delete event JSON error
+  - CareEditPermission class autoload issue
+  - Run `composer dump-autoload` after adding new PHP classes
+
+### Changed
+- 1 file added
+
+---
+
 ## [v0.1.5] - 2026-03-14
 ### Added
 - Cycle Feed Program Items feature
