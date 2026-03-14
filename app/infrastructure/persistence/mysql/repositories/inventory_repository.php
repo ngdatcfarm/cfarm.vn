@@ -62,7 +62,7 @@ class InventoryRepository
             $params[':cat'] = $category;
         }
         $where = "WHERE " . implode(" AND ", $clauses);
-        // Use GROUP BY ii.id to prevent duplicates from JOINs
+        // Simple query without complex JOINs to prevent duplicates
         return $this->fetch_all("
             SELECT ii.*,
                    s.name AS supplier_name,
@@ -70,10 +70,10 @@ class InventoryRepository
                    fb.name AS feed_brand_name,
                    ft.code AS feed_type_code
             FROM inventory_items ii
-            LEFT JOIN suppliers s       ON ii.supplier_id       = s.id
-            LEFT JOIN medications m     ON ii.ref_medication_id = m.id
-            LEFT JOIN feed_brands fb    ON ii.ref_feed_brand_id = fb.id
-            LEFT JOIN feed_types ft     ON ii.ref_feed_type_id  = ft.id
+            LEFT JOIN suppliers s    ON ii.supplier_id = s.id
+            LEFT JOIN medications m  ON ii.ref_medication_id = m.id
+            LEFT JOIN feed_brands fb ON ii.ref_feed_brand_id = fb.id
+            LEFT JOIN feed_types ft  ON ii.ref_feed_type_id = ft.id
             {$where}
             GROUP BY ii.id
             ORDER BY ii.category, ii.sub_category, ii.name
