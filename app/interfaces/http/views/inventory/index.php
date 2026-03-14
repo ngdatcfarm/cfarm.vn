@@ -30,6 +30,10 @@ ob_start();
             <span class="text-2xl">🌾</span>
             <div><div class="font-semibold text-sm">Vật tư sản xuất</div><div class="text-xs text-green-100">Cám · Thuốc · Trấu</div></div>
         </a>
+        <a href="/inventory/stock" class="bg-yellow-600 text-white rounded-2xl p-4 flex items-center gap-3">
+            <span class="text-2xl">📦</span>
+            <div><div class="font-semibold text-sm">Tồn kho theo chuồng</div><div class="text-xs text-yellow-100">Xem cám từng chuồng</div></div>
+        </a>
         <a href="/inventory/consumable" class="bg-indigo-600 text-white rounded-2xl p-4 flex items-center gap-3">
             <span class="text-2xl">🔧</span>
             <div><div class="font-semibold text-sm">Vật tư tiêu hao</div><div class="text-xs text-indigo-100">ESP32 · Cảm biến · Đèn</div></div>

@@ -283,6 +283,7 @@ use App\Interfaces\Http\Controllers\Web\Inventory\InventoryEditController;
 use App\Interfaces\Http\Controllers\Web\Inventory\SupplierController;
 
 $r->addRoute('GET',  '/inventory',                          [InventoryController::class, 'index']);
+$r->addRoute('GET',  '/inventory/stock',                    [InventoryController::class, 'stock_by_barn']);
 $r->addRoute('GET',  '/inventory/production',               [InventoryController::class, 'production']);
 $r->addRoute('GET',  '/inventory/consumable',               [InventoryController::class, 'consumable']);
 $r->addRoute('GET',  '/inventory/transactions',             [InventoryController::class, 'transactions']);

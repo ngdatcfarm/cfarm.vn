@@ -19,6 +19,79 @@ class InventoryController
         echo json_encode(array_merge(['ok'=>$ok,'message'=>$msg], $data));
     }
 
+    /**
+     * View inventory stock by barn - trang tổng quan tồn kho theo chuồng
+     */
+    public function stock_by_barn(array $vars): void
+    {
+        // Lấy tất cả barns
+        $barns = $this->pdo->query("SELECT * FROM barns WHERE status='active' ORDER BY number")->fetchAll();
+
+        // Lấy tất cả feed inventory items
+        $feed_items = $this->pdo->query("
+            SELECT ii.*, ft.code AS feed_code, fb.name AS brand_name
+            FROM inventory_items ii
+            LEFT JOIN feed_types ft ON ft.id = ii.ref_feed_type_id
+            LEFT JOIN feed_brands fb ON fb.id = ii.ref_feed_brand_id
+            WHERE ii.category = 'production' AND ii.sub_category = 'feed' AND ii.status = 'active'
+            ORDER BY fb.name, ft.suggested_stage
+        ")->fetchAll();
+
+        // Lấy tồn kho theo từng barn
+        $stock_by_barn = [];
+        foreach ($barns as &$barn) {
+            $stock_by_barn[$barn['id']] = [];
+            foreach ($feed_items as $item) {
+                $stmt = $this->pdo->prepare("SELECT quantity FROM inventory_stock WHERE item_id = ? AND barn_id = ?");
+                $stmt->execute([$item['id'], $barn['id']]);
+                $qty = $stmt->fetch();
+                $stock_by_barn[$barn['id']][$item['id']] = $qty ? (float)$qty['quantity'] : 0;
+            }
+        }
+        unset($barn);
+
+        // Tính tổng tồn kho trung tâm (không có barn_id)
+        $central_stock = [];
+        foreach ($feed_items as $item) {
+            $stmt = $this->pdo->prepare("SELECT quantity FROM inventory_stock WHERE item_id = ? AND barn_id IS NULL");
+            $stmt->execute([$item['id']]);
+            $qty = $stmt->fetch();
+            $central_stock[$item['id']] = $qty ? (float)$qty['quantity'] : 0;
+        }
+
+        // Lấy litter items
+        $litter_items = $this->pdo->query("
+            SELECT * FROM inventory_items
+            WHERE category = 'production' AND sub_category = 'litter' AND status = 'active'
+            ORDER BY name
+        ")->fetchAll();
+
+        // Lấy litter stock theo barn
+        $stock_by_barn_litter = [];
+        foreach ($barns as &$barn) {
+            $stock_by_barn_litter[$barn['id']] = [];
+            foreach ($litter_items as $item) {
+                $stmt = $this->pdo->prepare("SELECT quantity FROM inventory_stock WHERE item_id = ? AND barn_id = ?");
+                $stmt->execute([$item['id'], $barn['id']]);
+                $qty = $stmt->fetch();
+                $stock_by_barn_litter[$barn['id']][$item['id']] = $qty ? (float)$qty['quantity'] : 0;
+            }
+        }
+
+        // Lấy litter stock trung tâm
+        $central_stock_litter = [];
+        foreach ($litter_items as $item) {
+            $stmt = $this->pdo->prepare("SELECT quantity FROM inventory_stock WHERE item_id = ? AND barn_id IS NULL");
+            $stmt->execute([$item['id']]);
+            $qty = $stmt->fetch();
+            $central_stock_litter[$item['id']] = $qty ? (float)$qty['quantity'] : 0;
+        }
+
+        $title = 'Tồn Kho Theo Chuồng';
+        extract(compact('barns', 'feed_items', 'stock_by_barn', 'central_stock', 'litter_items', 'title', 'stock_by_barn_litter', 'central_stock_litter'));
+        require view_path('inventory/stock_by_barn.php');
+    }
+
     public function index(array $vars): void
     {
         $low_stock   = $this->repo->list_low_stock_items();
