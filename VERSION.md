@@ -21,6 +21,7 @@
 
 ### Database Changes
 - See SQLADD.md for SQL commands
+- **Important**: Chạy SQL để tạo inventory_items từ feed_types (không phải feed_brands)
 
 ### Changed
 - 5 files changed

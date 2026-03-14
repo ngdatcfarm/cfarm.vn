@@ -10,23 +10,26 @@ ADD COLUMN ref_feed_type_id INT NULL AFTER ref_feed_brand_id,
 ADD INDEX idx_ref_feed_type_id (ref_feed_type_id);
 ```
 
-### Optional: Update existing data to link feed_brands to inventory_items
+### Fix: Re-create inventory_items from feed_types (NOT feed_brands)
+
+**Important**: inventory_items cần liên kết với feed_types (từng loại cám theo giai đoạn), KHÔNG phải feed_brands.
 
 ```sql
--- Link existing feed_brands to inventory_items (run if needed)
-INSERT INTO inventory_items (name, category, sub_category, unit, ref_feed_brand_id, status)
+-- 1. Xóa inventory_items feed cũ (nếu có)
+DELETE FROM inventory_items
+WHERE category = 'production' AND sub_category = 'feed';
+
+-- 2. Tạo mới inventory_items từ feed_types (mỗi feed_type = 1 inventory_item)
+INSERT INTO inventory_items (name, category, sub_category, unit, ref_feed_brand_id, ref_feed_type_id, status)
 SELECT
-    fb.name,
-    'production',
-    'feed',
-    'bao',
-    fb.id,
-    'active'
-FROM feed_brands fb
-WHERE NOT EXISTS (
-    SELECT 1 FROM inventory_items ii
-    WHERE ii.ref_feed_brand_id = fb.id
-    AND ii.category = 'production'
-    AND ii.sub_category = 'feed'
-);
+    CONCAT(fb.name, ' - ', ft.name) AS name,
+    'production' AS category,
+    'feed' AS sub_category,
+    'bao' AS unit,
+    ft.feed_brand_id,
+    ft.id AS ref_feed_type_id,
+    'active' AS status
+FROM feed_types ft
+JOIN feed_brands fb ON ft.feed_brand_id = fb.id
+WHERE ft.status = 'active';
 ```
