@@ -88,7 +88,11 @@ foreach ($items as $item) $grouped[$item['sub_category']][] = $item;
             <div class="flex items-start justify-between gap-2 mb-3">
                 <div class="flex-1 min-w-0">
                     <div class="font-semibold text-sm"><?= e($item['name']) ?><?php if ($is_low): ?> <span class="text-orange-500 text-xs ml-1">⚠️ Thấp</span><?php endif; ?></div>
-                    <?php if ($item['supplier_name']): ?><div class="text-xs text-gray-400 mt-0.5">🏪 <?= e($item['supplier_name']) ?></div><?php endif; ?>
+                    <?php if ($item['sub_category'] === 'feed' && !empty($item['feed_type_code'])): ?>
+                        <div class="text-xs text-blue-500 mt-0.5">📦 Mã: <?= e($item['feed_type_code']) ?></div>
+                    <?php elseif ($item['supplier_name']): ?>
+                        <div class="text-xs text-gray-400 mt-0.5">🏪 <?= e($item['supplier_name']) ?></div>
+                    <?php endif; ?>
                 </div>
                 <div class="flex items-center gap-1.5">
                     <div class="text-right">
