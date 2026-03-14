@@ -56,6 +56,26 @@ ob_start();
                        class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
 
+            <!-- Chọn inventory_items theo giai đoạn -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-3">Chọn mã cám cho từng giai đoạn</label>
+                <div class="space-y-3">
+                    <?php foreach (['chick' => 'Gà con (0-3 tuần)', 'grower' => 'Gà choai (4-6 tuần)', 'adult' => 'Gà trưởng thành (7+ tuần)'] as $stage => $stage_label): ?>
+                    <div>
+                        <label class="block text-xs font-medium mb-1 text-gray-500"><?= $stage_label ?></label>
+                        <select name="inventory_item_id[<?= $stage ?>]" class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2 text-sm">
+                            <option value="">— Chọn mã cám —</option>
+                            <?php foreach ($feed_items_by_stage[$stage] ?? [] as $item): ?>
+                            <option value="<?= $item['id'] ?>" <?= ($current_program_items[$stage] ?? '') == $item['id'] ? 'selected' : '' ?>>
+                                <?= e($item['name']) ?> — Tồn: <?= number_format($item['quantity'] ?? 0, 1) ?> <?= e($item['unit'] ?? 'bao') ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
             <div class="mb-6">
                 <label class="block text-sm font-medium mb-1">Ghi chú lý do đổi</label>
                 <textarea name="note" rows="2"

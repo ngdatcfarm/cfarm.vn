@@ -297,6 +297,46 @@ class CycleController
         $cycle       = $this->cycle_repository->find_by_id((int) $vars['id']);
         $barn        = $this->barn_repository->find_by_id($cycle->barn_id);
         $feed_brands = $this->feed_brand_repository->find_active();
+
+        // Lấy inventory_items feed theo từng giai đoạn
+        $stmt = $this->pdo->query("
+            SELECT ii.*, ft.suggested_stage
+            FROM inventory_items ii
+            LEFT JOIN feed_types ft ON ft.id = ii.ref_feed_type_id
+            WHERE ii.category = 'production'
+              AND ii.sub_category = 'feed'
+              AND ii.status = 'active'
+            ORDER BY ft.suggested_stage, ii.name
+        ");
+        $all_feed_items = $stmt->fetchAll();
+
+        // Group theo stage
+        $feed_items_by_stage = [
+            'chick' => [],
+            'grower' => [],
+            'adult' => []
+        ];
+        foreach ($all_feed_items as $item) {
+            $stage = $item['suggested_stage'] ?: 'chick';
+            if (isset($feed_items_by_stage[$stage])) {
+                $feed_items_by_stage[$stage][] = $item;
+            } else {
+                $feed_items_by_stage['chick'][] = $item;
+            }
+        }
+
+        // Lấy feed_program_items hiện tại nếu có
+        $current_program_items = [];
+        $prog_stmt = $this->pdo->prepare("
+            SELECT cfpi.* FROM cycle_feed_programs cfp
+            JOIN cycle_feed_program_items cfpi ON cfpi.cycle_feed_program_id = cfp.id
+            WHERE cfp.cycle_id = :cycle_id AND cfp.end_date IS NULL
+        ");
+        $prog_stmt->execute([':cycle_id' => $cycle->id]);
+        foreach ($prog_stmt->fetchAll() as $item) {
+            $current_program_items[$item['stage']] = $item['inventory_item_id'];
+        }
+
         require view_path('cycle/cycle_feed_program.php');
     }
 
@@ -331,6 +371,23 @@ class CycleController
                 ':start_date'    => $_POST['start_date'],
                 ':note'          => $_POST['note'] ?? null,
             ]);
+            $feed_program_id = (int) $this->pdo->lastInsertId();
+
+            // Lưu inventory_items cho từng giai đoạn
+            $stages = ['chick', 'grower', 'adult'];
+            foreach ($stages as $stage) {
+                $inv_item_id = !empty($_POST['inventory_item_id'][$stage]) ? (int) $_POST['inventory_item_id'][$stage] : null;
+                if ($inv_item_id) {
+                    $this->pdo->prepare("
+                        INSERT INTO cycle_feed_program_items (cycle_feed_program_id, inventory_item_id, stage)
+                        VALUES (:program_id, :item_id, :stage)
+                    ")->execute([
+                        ':program_id' => $feed_program_id,
+                        ':item_id'   => $inv_item_id,
+                        ':stage'     => $stage,
+                    ]);
+                }
+            }
 
             redirect('/cycles/' . $cycle_id);
         } catch (InvalidArgumentException $e) {

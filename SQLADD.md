@@ -1,5 +1,24 @@
 # SQL Changes for v0.1.x
 
+## v0.1.5 - Cycle Feed Program Items (2026-03-14)
+
+### Create table cycle_feed_program_items
+
+```sql
+CREATE TABLE IF NOT EXISTS cycle_feed_program_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cycle_feed_program_id INT NOT NULL,
+    inventory_item_id INT NOT NULL,
+    stage ENUM('chick','grower','adult') NOT NULL,
+    status ENUM('active','inactive') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_cfpi_program (cycle_feed_program_id),
+    INDEX idx_cfpi_stage (stage),
+    FOREIGN KEY (cycle_feed_program_id) REFERENCES cycle_feed_programs(id) ON DELETE CASCADE,
+    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
+);
+```
+
 ## v0.1.4 - Feed Brand Auto-Generate (2026-03-14)
 
 ### Add column `ref_feed_type_id` to `inventory_items`
