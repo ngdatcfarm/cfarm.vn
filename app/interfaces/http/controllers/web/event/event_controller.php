@@ -97,25 +97,27 @@ class EventController
 
             // Lấy inventory_items từ cycle_feed_program_items nếu có, fallback về all feed items
             // Ưu tiên: inventory_items được chọn trong cycle_feed_program
+            // Hiển thị tồn kho từ BARN của cycle (không chỉ kho trung tâm)
+            $barn_id = $cycle->barn_id ?? null;
             $inv_stmt = $this->pdo->prepare("
                 SELECT ii.*,
                        ft.code AS feed_type_code,
                        fb.name AS brand_name,
                        ft.suggested_stage,
-                       COALESCE(s.quantity, 0) AS quantity,
+                       COALESCE(s_barn.quantity, 0) AS quantity,
                        cfpi.stage AS selected_stage
                 FROM cycle_feed_programs cfp
                 LEFT JOIN cycle_feed_program_items cfpi ON cfpi.cycle_feed_program_id = cfp.id
                 LEFT JOIN inventory_items ii ON cfpi.inventory_item_id = ii.id
                 LEFT JOIN feed_types ft ON ft.id = COALESCE(ii.ref_feed_type_id, cfpi.inventory_item_id)
                 LEFT JOIN feed_brands fb ON fb.id = COALESCE(ii.ref_feed_brand_id, ft.feed_brand_id)
-                LEFT JOIN inventory_stock s ON s.item_id = ii.id AND s.barn_id IS NULL
+                LEFT JOIN inventory_stock s_barn ON s_barn.item_id = ii.id AND s_barn.barn_id <=> :barn_id
                 WHERE cfp.cycle_id = :cycle_id
                   AND cfp.end_date IS NULL
                   AND (ii.id IS NULL OR (ii.category = 'production' AND ii.sub_category = 'feed' AND ii.status = 'active'))
                 ORDER BY cfpi.stage ASC, ft.suggested_stage ASC, ii.name ASC
             ");
-            $inv_stmt->execute([':cycle_id' => $cycle_id]);
+            $inv_stmt->execute([':cycle_id' => $cycle_id, ':barn_id' => $barn_id]);
             $feed_inventory_items = $inv_stmt->fetchAll();
 
             $med_stmt = $this->pdo->query("SELECT * FROM medications WHERE status='active' ORDER BY name ASC");
