@@ -57,6 +57,12 @@ WHERE id NOT IN (
 -- Disable FK checks
 SET FOREIGN_KEY_CHECKS = 0;
 
+-- Xóa tất cả các bảng liên quan đến feed inventory
+DELETE FROM inventory_purchases WHERE item_id IN (SELECT id FROM inventory_items WHERE category = 'production' AND sub_category = 'feed');
+DELETE FROM inventory_transactions WHERE item_id IN (SELECT id FROM inventory_items WHERE category = 'production' AND sub_category = 'feed');
+DELETE FROM inventory_stock WHERE item_id IN (SELECT id FROM inventory_items WHERE category = 'production' AND sub_category = 'feed');
+DELETE FROM inventory_sales WHERE item_id IN (SELECT id FROM inventory_items WHERE category = 'production' AND sub_category = 'feed');
+
 -- Xóa tất cả feed trong inventory
 DELETE FROM inventory_items WHERE category = 'production' AND sub_category = 'feed';
 
