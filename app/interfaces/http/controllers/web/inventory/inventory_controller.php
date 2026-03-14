@@ -105,7 +105,7 @@ class InventoryController
 
         $where = "WHERE " . implode(" AND ", $where_clauses);
 
-        $txns = $this->repo->fetch_all("
+        $stmt = $this->pdo->prepare("
             SELECT t.*, ii.name AS item_name, ii.unit,
                    b_from.name AS from_barn_name, b_to.name AS to_barn_name
             FROM inventory_transactions t
@@ -115,7 +115,9 @@ class InventoryController
             {$where}
             ORDER BY t.recorded_at DESC
             LIMIT 200
-        ", $params);
+        ");
+        $stmt->execute($params);
+        $txns = $stmt->fetchAll();
 
         // Get all items for filter dropdown
         $items = $this->repo->list_items();
