@@ -13,11 +13,25 @@ ob_start();
         <h1 class="text-xl font-bold">⚙️ Cài đặt</h1>
         <p class="text-sm text-gray-400 mt-0.5">Quản lý hãng cám & mã cám</p>
     </div>
-    <a href="/settings/feed-brands/create"
-       class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
-        + Thêm hãng
-    </a>
+    <div class="flex gap-2">
+        <form method="POST" action="/settings/feed-brands/sync-inventory" onsubmit="return confirm('Đồng bộ inventory từ feed_types?')">
+            <button type="submit"
+                    class="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+                🔄 Sync Kho
+            </button>
+        </form>
+        <a href="/settings/feed-brands/create"
+           class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+            + Thêm hãng
+        </a>
+    </div>
 </div>
+
+<?php if (isset($_GET['synced'])): ?>
+    <div class="mb-4 p-3 bg-green-50 text-green-700 rounded-xl text-sm border border-green-200">
+        ✅ Đã đồng bộ <?= (int)$_GET['synced'] ?> mã cám vào inventory
+    </div>
+<?php endif; ?>
 
 <?php if (empty($brands)): ?>
     <div class="text-center py-16 text-gray-400">

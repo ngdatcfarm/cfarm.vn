@@ -283,6 +283,15 @@ class SettingsController
             ->execute([':price' => $price, ':id' => (int)$vars['id']]);
         redirect('/settings/feed-brands/' . $vars['id']);
     }
+
+    // POST /settings/feed-brands/sync-inventory
+    public function feed_brand_sync_inventory(array $vars): void
+    {
+        $count = $this->feed_brand_service->syncInventoryFromFeedTypes();
+        header('Location: /settings/feed-brands?synced=' . $count);
+        exit;
+    }
+
     private function validate_brand(array $input): void
     {
         if (empty($input['name']))       throw new InvalidArgumentException('Thiếu tên hãng cám');

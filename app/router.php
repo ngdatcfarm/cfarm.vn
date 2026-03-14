@@ -152,6 +152,7 @@ $r->addRoute('POST', '/settings/feed-brands/{id:\d+}',          [SettingsControl
 $r->addRoute('POST', '/settings/feed-brands/{id:\d+}/types',    [SettingsController::class, 'feed_type_store']);
 $r->addRoute('POST', '/settings/feed-types/{id:\d+}/delete',    [SettingsController::class, 'feed_type_delete']);
 $r->addRoute('POST', '/settings/feed-types/{id:\d+}/update',    [SettingsController::class, 'feed_type_update']);
+$r->addRoute('POST', '/settings/feed-brands/sync-inventory',   [SettingsController::class, 'feed_brand_sync_inventory']);
 
 // ------------------------------------------------------------------
 // CARE (AJAX JSON endpoints)
