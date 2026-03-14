@@ -1,5 +1,21 @@
 # Version History - cfarm.vn
 
+## [v0.1.5] - 2026-03-14
+### Added
+- Cycle Feed Program Items feature
+  - New table: cycle_feed_program_items
+  - Cycle can select inventory_items for each growth stage (chick/grower/adult)
+  - Form in cycle_feed_program shows inventory_items by stage
+  - event_controller prioritizes cycle's selected inventory_items
+
+### Fixed
+- EventController: use inventory_stock table for quantity check (not inventory_items.quantity)
+
+### Changed
+- 4 files changed
+
+---
+
 ## [v0.1.4] - 2026-03-14
 ### Added
 - Feed Brand Auto-Generate feature
