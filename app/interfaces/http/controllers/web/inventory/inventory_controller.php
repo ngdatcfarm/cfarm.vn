@@ -53,6 +53,7 @@ class InventoryController
             $item['central_stock'] = $this->repo->get_stock((int)$item['id'], null);
             $item['barn_stocks']   = $this->repo->list_stock_for_item((int)$item['id']);
         }
+        unset($item); // Important: unset reference after foreach
         $expiring_meds = $this->pdo->query("
             SELECT p.*, ii.name AS item_name
             FROM inventory_purchases p
