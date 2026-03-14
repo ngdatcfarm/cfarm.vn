@@ -1,17 +1,25 @@
-<?php layout('header.php'); ?>
+<?php
+/**
+ * stock_by_barn.php - Tồn kho theo chuồng
+ */
+$title = 'Tồn Kho Theo Chuồng';
+ob_start();
+?>
 
-<div class="p-6 max-w-7xl mx-auto">
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold">📦 Tồn Kho Theo Chuồng</h1>
-        <a href="/inventory" class="text-blue-600 hover:underline">← Quay lại</a>
+<div class="max-w-6xl mx-auto space-y-4">
+    <div class="flex justify-between items-center">
+        <h1 class="text-xl font-bold">📦 Tồn Kho Theo Chuồng</h1>
+        <a href="/inventory" class="text-blue-600 hover:underline text-sm">← Quay lại</a>
     </div>
 
     <!-- Tồn kho trung tâm -->
-    <div class="bg-white rounded-lg shadow p-4 mb-6">
-        <h2 class="text-lg font-semibold mb-3">🏭 Kho Trung Tâm</h2>
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-100 dark:border-gray-600">
+            <h2 class="font-semibold text-sm">🏭 Kho Trung Tâm</h2>
+        </div>
         <div class="overflow-x-auto">
             <table class="min-w-full text-sm">
-                <thead class="bg-gray-100">
+                <thead class="bg-gray-50 dark:bg-gray-700">
                     <tr>
                         <th class="px-3 py-2 text-left">Mã cám</th>
                         <th class="px-3 py-2 text-left">Tên</th>
@@ -23,7 +31,7 @@
                     <?php foreach ($feed_items as $item): ?>
                         <?php $qty = $central_stock[$item['id']] ?? 0; ?>
                         <?php if ($qty > 0): ?>
-                        <tr class="<?= $qty < 10 ? 'bg-red-50' : '' ?>">
+                        <tr class="<?= $qty < 10 ? 'bg-red-50 dark:bg-red-900/20' : '' ?>">
                             <td class="px-3 py-2"><?= e($item['feed_code'] ?? '') ?></td>
                             <td class="px-3 py-2"><?= e($item['name']) ?></td>
                             <td class="px-3 py-2 text-right font-medium <?= $qty < 10 ? 'text-red-600' : '' ?>">
@@ -44,14 +52,16 @@
     <!-- Tồn kho theo chuồng -->
     <?php foreach ($barns as $barn): ?>
     <?php $has_stock = false; foreach ($feed_items as $item) { if (($stock_by_barn[$barn['id']][$item['id']] ?? 0) > 0) { $has_stock = true; break; } } ?>
-    <div class="bg-white rounded-lg shadow p-4 mb-4">
-        <h2 class="text-lg font-semibold mb-3">🏠 <?= e($barn['name']) ?></h2>
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-100 dark:border-gray-600">
+            <h2 class="font-semibold text-sm">🏠 <?= e($barn['name']) ?></h2>
+        </div>
         <?php if (!$has_stock): ?>
-            <p class="text-gray-500 italic">Chưa có tồn kho</p>
+            <div class="px-4 py-4 text-center text-gray-500 italic">Chưa có tồn kho</div>
         <?php else: ?>
         <div class="overflow-x-auto">
             <table class="min-w-full text-sm">
-                <thead class="bg-gray-100">
+                <thead class="bg-gray-50 dark:bg-gray-700">
                     <tr>
                         <th class="px-3 py-2 text-left">Mã cám</th>
                         <th class="px-3 py-2 text-left">Tên</th>
@@ -63,7 +73,7 @@
                     <?php foreach ($feed_items as $item): ?>
                         <?php $qty = $stock_by_barn[$barn['id']][$item['id']] ?? 0; ?>
                         <?php if ($qty > 0): ?>
-                        <tr class="<?= $qty < 10 ? 'bg-red-50' : '' ?>">
+                        <tr class="<?= $qty < 10 ? 'bg-red-50 dark:bg-red-900/20' : '' ?>">
                             <td class="px-3 py-2"><?= e($item['feed_code'] ?? '') ?></td>
                             <td class="px-3 py-2"><?= e($item['name']) ?></td>
                             <td class="px-3 py-2 text-right font-medium <?= $qty < 10 ? 'text-red-600' : '' ?>">
@@ -81,11 +91,14 @@
     <?php endforeach; ?>
 
     <!-- Tồn kho trấu -->
-    <div class="bg-white rounded-lg shadow p-4 mt-6">
-        <h2 class="text-lg font-semibold mb-3">🌾 Trấu / Litter</h2>
+    <?php if (!empty($litter_items)): ?>
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-100 dark:border-gray-600">
+            <h2 class="font-semibold text-sm">🌾 Trấu / Litter</h2>
+        </div>
         <div class="overflow-x-auto">
             <table class="min-w-full text-sm">
-                <thead class="bg-gray-100">
+                <thead class="bg-gray-50 dark:bg-gray-700">
                     <tr>
                         <th class="px-3 py-2 text-left">Tên vật tư</th>
                         <th class="px-3 py-2 text-right">Kho trung tâm</th>
@@ -104,13 +117,11 @@
                         <?php endforeach; ?>
                     </tr>
                     <?php endforeach; ?>
-                    <?php if (empty($litter_items)): ?>
-                    <tr><td colspan="<?= count($barns) + 2 ?>" class="px-3 py-4 text-center text-gray-500">Chưa có vật tư trấu</td></tr>
-                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
+    <?php endif; ?>
 
     <?php if (empty($barns)): ?>
     <div class="text-center py-8 text-gray-500">
@@ -119,4 +130,6 @@
     <?php endif; ?>
 </div>
 
-<?php layout('footer.php'); ?>
+<?php
+$content = ob_get_clean();
+require view_path('layouts/main.php');
