@@ -15,6 +15,66 @@ class InventoryStockService
     }
 
     /**
+     * Kiểm tra tồn kho cám TRƯỚC KHI LƯU (không trừ)
+     * @throws InvalidArgumentException nếu không đủ tồn kho
+     */
+    public function check_feed_stock(int $cycle_id, int $feed_type_id, float $bags): void
+    {
+        if ($bags <= 0) return;
+
+        // Lấy barn_id từ cycle
+        $stmt = $this->pdo->prepare("SELECT barn_id FROM cycles WHERE id=:id");
+        $stmt->execute([':id' => $cycle_id]);
+        $cycle = $stmt->fetch();
+        if (!$cycle) return;
+        $barn_id = (int)$cycle['barn_id'];
+
+        // Lấy feed_type và feed_brand_id
+        $stmt = $this->pdo->prepare("SELECT feed_brand_id FROM feed_types WHERE id=:id");
+        $stmt->execute([':id' => $feed_type_id]);
+        $ft = $stmt->fetch();
+        if (!$ft) return;
+
+        // Tìm inventory_items qua ref_feed_type_id
+        $stmt = $this->pdo->prepare("
+            SELECT id FROM inventory_items
+            WHERE ref_feed_type_id = :type_id
+            AND category='production'
+            AND sub_category='feed'
+            AND status='active'
+            LIMIT 1
+        ");
+        $stmt->execute([':type_id' => $feed_type_id]);
+        $item = $stmt->fetch();
+
+        // Fallback: tìm qua ref_feed_brand_id
+        if (!$item) {
+            $stmt = $this->pdo->prepare("
+                SELECT id FROM inventory_items
+                WHERE ref_feed_brand_id = :brand_id
+                AND category='production'
+                AND sub_category='feed'
+                AND status='active'
+                LIMIT 1
+            ");
+            $stmt->execute([':brand_id' => (int)$ft['feed_brand_id']]);
+            $item = $stmt->fetch();
+        }
+
+        if (!$item) {
+            throw new InvalidArgumentException('Không tìm thấy vật tư cám trong kho');
+        }
+
+        // Kiểm tra tồn kho
+        $currentStock = $this->repo->get_stock((int)$item['id'], $barn_id);
+        if ($currentStock < $bags) {
+            throw new InvalidArgumentException(
+                "Tồn kho không đủ! Hiện có: " . number_format($currentStock, 1) . " bao, cần: " . number_format($bags, 1) . " bao"
+            );
+        }
+    }
+
+    /**
      * Trừ tồn kho cám khi ghi care_feeds
      * @throws InvalidArgumentException nếu không đủ tồn kho
      */

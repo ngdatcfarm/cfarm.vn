@@ -70,6 +70,11 @@ class CareController
                 throw new \InvalidArgumentException('Cycle chưa cài đặt hãng cám. Vui lòng cài đặt trước khi ghi cho ăn.');
             }
 
+            // KIỂM TRA TỒN KHO TRƯỚC KHI LƯU (quan trọng!)
+            $stock_svc = new \App\Domains\Inventory\Services\InventoryStockService($this->pdo);
+            $stock_svc->check_feed_stock((int)$_POST['cycle_id'], (int)$_POST['feed_type_id'], (float)$_POST['bags']);
+
+            // CHỈ LƯU SAU KHI KIỂM TRA TỒN KHO THÀNH CÔNG
             $usecase = new RecordFeedUsecase(
                 $this->care_repository,
                 new FeedTypeRepository($this->pdo),
@@ -77,20 +82,16 @@ class CareController
             );
             $id = $usecase->execute($cycle_id, $_POST);
             $this->trigger_snapshot((int)$_POST['cycle_id'], $_POST['recorded_at'] ?? null);
-            // AUTO DEDUCT INVENTORY
-            try {
-                $stock_svc = new \App\Domains\Inventory\Services\InventoryStockService($this->pdo);
-                $stock_svc->deduct_feed($id, (int)$_POST['cycle_id'], (int)$_POST['feed_type_id'], (float)$_POST['bags']);
-            } catch (\InvalidArgumentException $e) {
-                // Đã ghi care_feeds nhưng không trừ được inventory - báo lỗi cho user
-                $this->json(false, $e->getMessage());
-                return;
-            } catch (\Throwable $e) {
-                error_log("Inventory deduct_feed: ".$e->getMessage());
-            }
+
+            // AUTO DEDUCT INVENTORY (sau khi đã lưu thành công)
+            $stock_svc->deduct_feed($id, (int)$_POST['cycle_id'], (int)$_POST['feed_type_id'], (float)$_POST['bags']);
+
             $this->json(true, 'Đã ghi chép cho ăn', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {
             $this->json(false, $e->getMessage());
+        } catch (\Throwable $e) {
+            error_log("store_feed error: " . $e->getMessage());
+            $this->json(false, 'Lỗi: ' . $e->getMessage());
         }
     }
 
