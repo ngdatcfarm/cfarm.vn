@@ -1,5 +1,23 @@
 # Version History - cfarm.vn
 
+## [v0.1.7] - 2026-03-15
+### Added
+- Inventory Stock by Barn view
+  - New route: /inventory/stock
+  - Show feed stock by barn and central warehouse
+  - Show litter stock by barn
+  - Warning when stock < 10
+
+### Fixed
+- CycleRepository: removed feed_waste_pct column (doesn't exist in DB)
+- EventController: added null checks for $cycle before accessing properties
+- stock_by_barn.php: fixed layout pattern
+
+### Changed
+- 3 files changed
+
+---
+
 ## [v0.1.6] - 2026-03-14
 ### Added
 - CareEditPermission service

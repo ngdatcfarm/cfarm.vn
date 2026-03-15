@@ -1,5 +1,14 @@
 # WORK LOG – app.cfarm.vn
 
+## 2026-03-15
+- Tạo trang inventory stock by barn
+  - Route: /inventory/stock
+  - Hiển thị tồn kho cám theo từng chuồng
+  - Hiển thị tồn kho trấu theo chuồng
+  - Cảnh báo khi tồn kho < 10
+- Fix CycleRepository - bỏ cột feed_waste_pct không tồn tại trong DB
+- Fix EventController - thêm null check cho $cycle trước khi truy cập properties
+
 ## 2026-03-14 (tiếp)
 - Tạo CareEditPermission service
   - File: app/domains/care/services/care_edit_permission.php

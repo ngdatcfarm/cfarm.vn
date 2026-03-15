@@ -206,4 +206,109 @@ class InventoryStockService
             throw new InvalidArgumentException('Lỗi khi trừ tồn kho: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Hoàn lại tồn kho cám khi xóa care_feed
+     */
+    public function restore_feed(int $care_feed_id, int $cycle_id, int $feed_type_id, float $bags): void
+    {
+        if ($bags <= 0) return;
+
+        try {
+            // Lấy barn_id từ cycle
+            $stmt = $this->pdo->prepare("SELECT barn_id FROM cycles WHERE id=:id");
+            $stmt->execute([':id' => $cycle_id]);
+            $cycle = $stmt->fetch();
+            if (!$cycle) return;
+            $barn_id = (int)$cycle['barn_id'];
+
+            // Lấy feed_type
+            $stmt = $this->pdo->prepare("SELECT feed_brand_id FROM feed_types WHERE id=:id");
+            $stmt->execute([':id' => $feed_type_id]);
+            $ft = $stmt->fetch();
+            if (!$ft) return;
+
+            // Tìm inventory_items
+            $stmt = $this->pdo->prepare("
+                SELECT id FROM inventory_items
+                WHERE ref_feed_type_id = :type_id
+                AND category='production'
+                AND sub_category='feed'
+                AND status='active'
+                LIMIT 1
+            ");
+            $stmt->execute([':type_id' => $feed_type_id]);
+            $item = $stmt->fetch();
+
+            if (!$item) {
+                $stmt = $this->pdo->prepare("
+                    SELECT id FROM inventory_items
+                    WHERE ref_feed_brand_id = :brand_id
+                    AND category='production'
+                    AND sub_category='feed'
+                    AND status='active'
+                    LIMIT 1
+                ");
+                $stmt->execute([':brand_id' => (int)$ft['feed_brand_id']]);
+                $item = $stmt->fetch();
+            }
+
+            if (!$item) return; // Không tìm thấy thì bỏ qua
+
+            // Hoàn lại tồn kho (cộng lại)
+            $this->repo->upsert_stock((int)$item['id'], $barn_id, $bags);
+            $this->repo->create_transaction([
+                'item_id'          => (int)$item['id'],
+                'txn_type'         => 'restore_feed',
+                'from_barn_id'     => $barn_id,
+                'quantity'         => $bags,
+                'cycle_id'         => $cycle_id,
+                'ref_care_feed_id' => $care_feed_id,
+                'note'             => "Hoàn lại từ xóa care_feeds #{$care_feed_id}",
+                'recorded_at'      => date('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $e) {
+            error_log("Inventory restore_feed error: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Hoàn lại tồn kho thuốc khi xóa care_medication
+     */
+    public function restore_medication(int $care_med_id, int $cycle_id, ?int $medication_id, float $dosage, string $unit): void
+    {
+        if (!$medication_id || $dosage <= 0) return;
+
+        try {
+            $stmt = $this->pdo->prepare("SELECT barn_id FROM cycles WHERE id=:id");
+            $stmt->execute([':id' => $cycle_id]);
+            $cycle = $stmt->fetch();
+            if (!$cycle) return;
+            $barn_id = (int)$cycle['barn_id'];
+
+            $stmt = $this->pdo->prepare("
+                SELECT id FROM inventory_items
+                WHERE ref_medication_id=:med AND category='production'
+                AND sub_category='medicine' AND status='active' LIMIT 1
+            ");
+            $stmt->execute([':med' => $medication_id]);
+            $item = $stmt->fetch();
+            if (!$item) return;
+
+            // Hoàn lại tồn kho (cộng lại)
+            $this->repo->upsert_stock((int)$item['id'], $barn_id, $dosage);
+            $this->repo->create_transaction([
+                'item_id'                => (int)$item['id'],
+                'txn_type'               => 'restore_medicine',
+                'from_barn_id'           => $barn_id,
+                'quantity'               => $dosage,
+                'cycle_id'               => $cycle_id,
+                'ref_care_medication_id' => $care_med_id,
+                'note'                   => "Hoàn lại từ xóa care_medications #{$care_med_id}",
+                'recorded_at'            => date('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $e) {
+            error_log("Inventory restore_medication error: " . $e->getMessage());
+        }
+    }
 }

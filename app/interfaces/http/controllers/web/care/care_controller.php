@@ -188,7 +188,47 @@ class CareController
 
     public function delete_feed(array $vars): void
     {
-        $this->handle_delete('care_feeds', (int)$vars['id'], $_POST['override_pass'] ?? null);
+        $id = (int)$vars['id'];
+        $pass = $_POST['override_pass'] ?? null;
+
+        // Lấy thông tin trước khi xóa
+        $stmt = $this->pdo->prepare("
+            SELECT cf.cycle_id, cf.feed_type_id, cf.bags, cf.recorded_at
+            FROM care_feeds cf WHERE cf.id = :id
+        ");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            $this->json(false, 'Không tìm thấy bản ghi');
+            return;
+        }
+
+        if (!CareEditPermission::can_delete($row['recorded_at'], $pass)) {
+            $deadline = CareEditPermission::delete_deadline($row['recorded_at']);
+            $this->json(false, "Quá hạn xóa ({$deadline}). Nhập mật khẩu để tiếp tục.", [
+                'need_pass' => true
+            ]);
+            return;
+        }
+
+        // HOÀN LẠI TỒN KHO trước khi xóa
+        if ($row['bags'] > 0) {
+            try {
+                $stock_svc = new \App\Domains\Inventory\Services\InventoryStockService($this->pdo);
+                $stock_svc->restore_feed($id, (int)$row['cycle_id'], (int)$row['feed_type_id'], (float)$row['bags']);
+            } catch (\Throwable $e) {
+                error_log("Restore feed stock error: " . $e->getMessage());
+            }
+        }
+
+        // Xóa bản ghi
+        $this->pdo->prepare("DELETE FROM care_feeds WHERE id = :id")->execute([':id' => $id]);
+
+        // Trigger snapshot
+        $this->trigger_snapshot((int)$row['cycle_id'], $row['recorded_at']);
+
+        $this->json(true, 'Đã xóa và hoàn lại tồn kho');
     }
 
     public function delete_death(array $vars): void
@@ -198,7 +238,44 @@ class CareController
 
     public function delete_medication(array $vars): void
     {
-        $this->handle_delete('care_medications', (int)$vars['id'], $_POST['override_pass'] ?? null);
+        $id = (int)$vars['id'];
+        $pass = $_POST['override_pass'] ?? null;
+
+        // Lấy thông tin trước khi xóa
+        $stmt = $this->pdo->prepare("
+            SELECT cm.cycle_id, cm.medication_id, cm.dosage, cm.unit, cm.recorded_at
+            FROM care_medications cm WHERE cm.id = :id
+        ");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            $this->json(false, 'Không tìm thấy bản ghi');
+            return;
+        }
+
+        if (!CareEditPermission::can_delete($row['recorded_at'], $pass)) {
+            $deadline = CareEditPermission::delete_deadline($row['recorded_at']);
+            $this->json(false, "Quá hạn xóa ({$deadline}). Nhập mật khẩu để tiếp tục.", [
+                'need_pass' => true
+            ]);
+            return;
+        }
+
+        // HOÀN LẠI TỒN KHO thuốc trước khi xóa
+        if ($row['dosage'] > 0 && $row['medication_id']) {
+            try {
+                $stock_svc = new \App\Domains\Inventory\Services\InventoryStockService($this->pdo);
+                $stock_svc->restore_medication($id, (int)$row['cycle_id'], (int)$row['medication_id'], (float)$row['dosage'], $row['unit']);
+            } catch (\Throwable $e) {
+                error_log("Restore medication stock error: " . $e->getMessage());
+            }
+        }
+
+        // Xóa bản ghi
+        $this->pdo->prepare("DELETE FROM care_medications WHERE id = :id")->execute([':id' => $id]);
+
+        $this->json(true, 'Đã xóa và hoàn lại tồn kho');
     }
 
     public function delete_sale(array $vars): void
