@@ -265,7 +265,7 @@ class IoTSettingsController
     {
         $device_id = (int)$vars['device_id'];
         $device = $this->pdo->prepare("
-            SELECT d.*, b.name as barn_name, dt.firmware_template, dt.mqtt_protocol, dt.name as type_name
+            SELECT d.*, b.name as barn_name, dt.firmware_template, dt.firmware_version, dt.base_firmware, dt.mqtt_protocol, dt.name as type_name
             FROM devices d
             LEFT JOIN barns b ON b.id = d.barn_id
             LEFT JOIN device_types dt ON dt.id = d.device_type_id
@@ -273,6 +273,18 @@ class IoTSettingsController
         ");
         $device->execute([':id' => $device_id]);
         $device = $device->fetch(PDO::FETCH_OBJ);
+
+        // Lấy lịch sử allocation
+        $allocations = $this->pdo->prepare("
+            SELECT a.*, dt.name as type_name
+            FROM device_firmware_allocations a
+            LEFT JOIN device_types dt ON dt.id = a.device_type_id
+            WHERE a.device_id = :id
+            ORDER BY a.allocated_at DESC
+            LIMIT 10
+        ");
+        $allocations->execute([':id' => $device_id]);
+        $allocations = $allocations->fetchAll(PDO::FETCH_OBJ);
         if (!$device) { http_response_code(404); echo 'Device not found'; exit; }
 
         $channels = $this->pdo->prepare("
@@ -292,6 +304,7 @@ class IoTSettingsController
         $curtains->execute([':id' => $device_id, ':id2' => $device_id]);
         $curtains = $curtains->fetchAll(PDO::FETCH_OBJ);
 
+        extract(compact('device', 'channels', 'curtains', 'allocations'));
         require view_path('iot/firmware.php');
     }
 
@@ -386,6 +399,12 @@ class IoTSettingsController
         if ($field === 'firmware_template') {
             $this->pdo->prepare("UPDATE device_types SET firmware_template=:val WHERE id=:id")
                 ->execute([':val' => $_POST['value'] ?? '', ':id' => $id]);
+        } elseif ($field === 'base_firmware') {
+            $this->pdo->prepare("UPDATE device_types SET base_firmware=:val WHERE id=:id")
+                ->execute([':val' => $_POST['value'] ?? '', ':id' => $id]);
+        } elseif ($field === 'firmware_version') {
+            $this->pdo->prepare("UPDATE device_types SET firmware_version=:val WHERE id=:id")
+                ->execute([':val' => $_POST['value'] ?? '1.0.0', ':id' => $id]);
         } elseif ($field === 'mqtt_protocol') {
             $this->pdo->prepare("UPDATE device_types SET mqtt_protocol=:val WHERE id=:id")
                 ->execute([':val' => $_POST['value'] ?? '', ':id' => $id]);
@@ -403,6 +422,71 @@ class IoTSettingsController
         }
 
         $this->json(['ok' => true, 'saved_at' => date('H:i:s')]);
+    }
+
+    // ================================================================
+    // FIRMWARE ALLOCATION
+    // ================================================================
+
+    // POST /settings/iot/device/{id}/allocate-firmware
+    public function allocate_firmware(array $vars): void
+    {
+        $device_id = (int)$vars['id'];
+
+        // Lấy device và device_type info
+        $stmt = $this->pdo->prepare("
+            SELECT d.*, dt.firmware_version, dt.name as type_name
+            FROM devices d
+            JOIN device_types dt ON dt.id = d.device_type_id
+            WHERE d.id = :id
+        ");
+        $stmt->execute([':id' => $device_id]);
+        $device = $stmt->fetch();
+
+        if (!$device) {
+            $this->json(false, 'Không tìm thấy thiết bị');
+            return;
+        }
+
+        // Tạo allocation record
+        $config = json_encode([
+            'mqtt_topic' => $device['mqtt_topic'],
+            'device_code' => $device['device_code'],
+            'barn_id' => $device['barn_id']
+        ]);
+
+        $this->pdo->prepare("
+            INSERT INTO device_firmware_allocations
+            (device_id, device_type_id, firmware_version, allocated_by, config, notes)
+            VALUES (:device_id, :type_id, :version, 'system', :config, :notes)
+        ")->execute([
+            ':device_id' => $device_id,
+            ':type_id' => $device['device_type_id'],
+            ':version' => $device['firmware_version'],
+            ':config' => $config,
+            ':notes' => 'Auto allocated from firmware view'
+        ]);
+
+        $this->json(true, 'Đã cấp phát firmware v' . $device['firmware_version']);
+    }
+
+    // GET /settings/iot/device/{id}/allocations - xem lịch sử allocation
+    public function device_allocations(array $vars): void
+    {
+        $device_id = (int)$vars['id'];
+
+        $stmt = $this->pdo->prepare("
+            SELECT a.*, dt.name as type_name
+            FROM device_firmware_allocations a
+            JOIN device_types dt ON dt.id = a.device_type_id
+            WHERE a.device_id = :id
+            ORDER BY a.allocated_at DESC
+        ");
+        $stmt->execute([':id' => $device_id]);
+        $allocations = $stmt->fetchAll();
+
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => true, 'allocations' => $allocations]);
     }
 
     // POST /settings/iot/device/{id}/toggle-alert

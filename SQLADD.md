@@ -1,5 +1,34 @@
 # SQL Changes for v0.1.x
 
+## Phase 1: Firmware Version Control (2026-03-16)
+
+### Add firmware_version and base_firmware to device_types
+
+```sql
+ALTER TABLE device_types
+ADD COLUMN firmware_version VARCHAR(20) DEFAULT '1.0.0' AFTER firmware_template,
+ADD COLUMN base_firmware LONGTEXT AFTER firmware_version;
+```
+
+### Create device_firmware_allocations table
+
+```sql
+CREATE TABLE IF NOT EXISTS device_firmware_allocations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id INT NOT NULL,
+    device_type_id INT NOT NULL,
+    firmware_version VARCHAR(20) NOT NULL,
+    allocated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    allocated_by VARCHAR(100) DEFAULT 'system',
+    config JSON,
+    notes TEXT,
+    INDEX idx_device (device_id),
+    INDEX idx_allocated_at (allocated_at)
+);
+```
+
+---
+
 ## CLEAN ALL DATA (Keep Users)
 
 Xóa tất cả dữ liệu trong database, giữ lại bảng users:

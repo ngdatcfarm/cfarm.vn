@@ -248,6 +248,9 @@ $r->addRoute('GET',  '/settings/iot/types/{id:\d+}',          [IoTSettingsContro
 $r->addRoute('POST', '/settings/iot/types/{id:\d+}/save',     [IoTSettingsController::class, 'type_save']);
 
 $r->addRoute('POST', '/settings/iot/device/{id:\d+}/toggle-alert', [IoTSettingsController::class, 'device_toggle_alert']);
+$r->addRoute('POST', '/settings/iot/device/{id:\d+}/allocate-firmware', [IoTSettingsController::class, 'allocate_firmware']);
+$r->addRoute('GET', '/settings/iot/device/{id:\d+}/allocations', [IoTSettingsController::class, 'device_allocations']);
+
 // IoT Device Types
 $r->addRoute('POST', '/settings/iot/type/store',                 [IoTSettingsController::class, 'type_store']);
 $r->addRoute('POST', '/settings/iot/type/{id:\d+}/update',     [IoTSettingsController::class, 'type_update']);

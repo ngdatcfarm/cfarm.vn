@@ -51,7 +51,7 @@ if (!empty($device->firmware_template)) {
             $firmware_code
         );
     }
-    $source_label = '📦 ' . e($device->type_name);
+    $source_label = '📦 ' . e($device->type_name) . ' v' . e($device->firmware_version ?? '1.0.0');
 } else {
     $firmware_code = '// Chưa có firmware template cho loại: ' . e($device->type_name) . "\n"
         . '// Vào Settings > IoT > Loại thiết bị > Sửa để thêm firmware template.';
@@ -90,6 +90,54 @@ ob_start();
         </div>
     </div>
 </div>
+
+<!-- Firmware Allocation -->
+<div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-4">
+    <div class="flex items-center justify-between mb-3">
+        <div class="text-sm font-semibold">📦 Cấp phát Firmware</div>
+        <button onclick="allocateFirmware()"
+                class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+            🔄 Cấp phát mới
+        </button>
+    </div>
+    <?php if (!empty($allocations)): ?>
+    <div class="text-xs space-y-1">
+        <div class="text-gray-500 font-semibold mb-2">📋 Lịch sử cấp phát:</div>
+        <?php foreach ($allocations as $alloc): ?>
+        <div class="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-700 last:border-0">
+            <div>
+                <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">v<?= e($alloc->firmware_version) ?></span>
+                <span class="text-gray-500 ml-2"><?= e($alloc->type_name) ?></span>
+            </div>
+            <div class="text-gray-400"><?= date('d/m/Y H:i', strtotime($alloc->allocated_at)) ?></div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php else: ?>
+    <div class="text-xs text-gray-400 italic">Chưa có lịch sử cấp phát</div>
+    <?php endif; ?>
+</div>
+
+<script>
+async function allocateFirmware() {
+    if (!confirm('Cấp phát firmware mới cho thiết bị này?')) return;
+    try {
+        const r = await fetch('/settings/iot/device/<?= $device->id ?>/allocate-firmware', {
+            method: 'POST',
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        });
+        const d = await r.json();
+        if (d.ok) {
+            alert('✅ ' + d.message);
+            location.reload();
+        } else {
+            alert('❌ ' + d.message);
+        }
+    } catch(e) {
+        alert('❌ Lỗi kết nối');
+    }
+}
+</script>
 
 <?php if ($device_class === 'relay'): ?>
 <!-- Pin Configurator -->

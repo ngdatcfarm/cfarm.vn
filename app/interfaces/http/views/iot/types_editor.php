@@ -78,8 +78,47 @@ ob_start();
             </button>
         </div>
 
+        <!-- Firmware version -->
+        <div class="p-4 border-t border-gray-100 dark:border-gray-700">
+            <div class="flex items-center justify-between mb-2">
+                <div class="text-xs font-semibold text-gray-500">🏷️ Firmware Version</div>
+                <div class="flex gap-2 items-center">
+                    <input id="fw-ver-<?= $dt->id ?>"
+                           value="<?= e($dt->firmware_version ?? '1.0.0') ?>"
+                           class="border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 text-xs w-20 text-center font-mono"
+                           placeholder="1.0.0">
+                    <button onclick="saveFirmwareVersion(<?= $dt->id ?>)"
+                            class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-2 py-1 rounded-lg">
+                        💾
+                    </button>
+                </div>
+            </div>
+            <div class="text-xs text-gray-400">
+                Version dùng để tracking khi cấp phát firmware cho thiết bị
+            </div>
+        </div>
+
+        <!-- Base Firmware (có thể tái sử dụng) -->
+        <div class="p-4 border-t border-gray-100 dark:border-gray-700">
+            <div class="flex items-center justify-between mb-2">
+                <div class="text-xs font-semibold text-gray-500">📦 Base Firmware (Template gốc)</div>
+                <div class="flex gap-2">
+                    <span id="basefw-status-<?= $dt->id ?>" class="text-xs text-gray-400"></span>
+                    <button onclick="saveBaseFirmware(<?= $dt->id ?>)"
+                            class="bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-1 rounded-lg">
+                        💾 Lưu
+                    </button>
+                </div>
+            </div>
+            <textarea id="basefw-<?= $dt->id ?>"
+                      class="w-full font-mono text-xs bg-gray-900 text-blue-400 p-3 rounded-xl resize-y border-0 outline-none"
+                      style="min-height:160px; line-height:1.5"
+                      placeholder="// Base firmware code - dùng làm template cho firmware mới..."
+                      spellcheck="false"><?= e($dt->base_firmware ?? '') ?></textarea>
+        </div>
+
         <!-- Firmware template editor -->
-        <div class="p-4">
+        <div class="p-4 border-t border-gray-100 dark:border-gray-700">
             <div class="flex items-center justify-between mb-2">
                 <div class="text-xs font-semibold text-gray-500">📝 Firmware Template (Arduino C++)</div>
                 <div class="flex gap-2">
@@ -211,6 +250,38 @@ async function saveFirmware(id) {
         });
         const d = await r.json();
         st.textContent = d.ok ? '✅ Đã lưu ' + d.saved_at : '❌ Lỗi';
+        setTimeout(() => st.textContent = '', 4000);
+    } catch(e) { st.textContent = '❌ Lỗi mạng'; }
+}
+
+async function saveFirmwareVersion(id) {
+    const val = document.getElementById('fw-ver-' + id).value;
+    const st  = document.getElementById('fw-status-' + id);
+    st.textContent = 'Đang lưu...';
+    try {
+        const r = await fetch('/settings/iot/types/' + id + '/save', {
+            method: 'POST',
+            headers: {'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+            body: 'field=firmware_version&value=' + encodeURIComponent(val)
+        });
+        const d = await r.json();
+        st.textContent = d.ok ? '✅ Version saved!' : '❌ Lỗi';
+        setTimeout(() => st.textContent = '', 4000);
+    } catch(e) { st.textContent = '❌ Lỗi mạng'; }
+}
+
+async function saveBaseFirmware(id) {
+    const val = document.getElementById('basefw-' + id).value;
+    const st  = document.getElementById('basefw-status-' + id);
+    st.textContent = 'Đang lưu...';
+    try {
+        const r = await fetch('/settings/iot/types/' + id + '/save', {
+            method: 'POST',
+            headers: {'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+            body: 'field=base_firmware&value=' + encodeURIComponent(val)
+        });
+        const d = await r.json();
+        st.textContent = d.ok ? '✅ Đã lưu base firmware' : '❌ Lỗi';
         setTimeout(() => st.textContent = '', 4000);
     } catch(e) { st.textContent = '❌ Lỗi mạng'; }
 }
