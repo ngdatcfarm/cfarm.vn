@@ -1,8 +1,6 @@
-<?php
-$title = 'Hướng dẫn sử dụng IoT — cfarm.vn';
+<?php // Direct output without layout ?>
 
-ob_start();
-?>
+
 
 <div class="mb-4">
     <a href="/settings/iot" class="text-sm text-blue-600 hover:underline">← IoT Settings</a>
@@ -302,7 +300,3 @@ Web UI ──HTTP──> device_controller ──MQTT──> cfarm/ESP001/comman
         <a href="/env" class="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-full">🌡️ Môi trường</a>
     </div>
 </div>
-
-<?php
-$content = ob_get_clean();
-require view_path('layouts/main.php');
