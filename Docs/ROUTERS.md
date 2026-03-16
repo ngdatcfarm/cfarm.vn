@@ -263,14 +263,22 @@
 | Method | Route | Controller | Action |
 |--------|-------|------------|--------|
 | GET | `/settings/iot` | IoTSettingsController | index |
+| GET | `/settings/iot/help` | IoTSettingsController | iot_help |
 | POST | `/settings/iot/curtain/store` | IoTSettingsController | curtain_store |
 | POST | `/settings/iot/curtain/{id}/update` | IoTSettingsController | curtain_update |
 | POST | `/settings/iot/curtain/{id}/delete` | IoTSettingsController | curtain_delete |
 | GET | `/settings/iot/firmware/{device_id}` | IoTSettingsController | firmware_code |
+| GET | `/settings/iot/firmware/{device_id}/raw` | IoTSettingsController | firmware_raw |
+| GET | `/settings/iot/firmwares` | IoTSettingsController | firmwares_index |
+| POST | `/settings/iot/firmwares/upload` | IoTSettingsController | firmware_upload |
+| POST | `/settings/iot/firmware/{id}/delete` | IoTSettingsController | firmware_delete |
 | POST | `/settings/iot/device/store` | IoTSettingsController | device_store |
 | POST | `/settings/iot/device/{id}/update` | IoTSettingsController | device_update |
+| POST | `/settings/iot/device/{id}/pins` | IoTSettingsController | device_pins_save |
 | POST | `/settings/iot/device/{id}/delete` | IoTSettingsController | device_delete |
 | POST | `/settings/iot/device/{id}/toggle-alert` | IoTSettingsController | device_toggle_alert |
+| POST | `/settings/iot/device/{id}/allocate-firmware` | IoTSettingsController | allocate_firmware |
+| GET | `/settings/iot/device/{id}/allocations` | IoTSettingsController | device_allocations |
 
 ### IoT Node
 
@@ -299,9 +307,18 @@
 |--------|-------|------------|--------|
 | GET | `/iot/curtains/setup` | CurtainSetupController | setup |
 | POST | `/iot/curtains/store` | CurtainSetupController | store |
+| POST | `/iot/curtains/visual-save` | CurtainSetupController | visual_save |
 | GET | `/iot/curtains/{id}/edit` | CurtainSetupController | edit |
 | POST | `/iot/curtains/{id}/update` | CurtainSetupController | update |
 | POST | `/iot/curtains/{id}/delete` | CurtainSetupController | delete |
+
+### API - Firmware OTA
+
+| Method | Route | Controller | Action |
+|--------|-------|------------|--------|
+| GET | `/api/firmware/{device_type}/latest` | IoTSettingsController | ota_check |
+| GET | `/api/firmware/{device_type}/bin` | IoTSettingsController | ota_redirect |
+| GET | `/api/firmware/download/{id}` | IoTSettingsController | ota_download |
 
 ---
 

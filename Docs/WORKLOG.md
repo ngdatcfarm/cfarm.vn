@@ -1,5 +1,34 @@
 # WORK LOG – app.cfarm.vn
 
+## 2026-03-16 (tiếp)
+- Visual Curtain Configuration
+  - Thiết kế lại trang /iot/curtains/setup với giao diện trực quan
+  - 8 ô relay hiển thị CH và GPIO
+  - Click LÊN trước → Click XUỐNG để chọn cặp
+  - Hiển thị real-time các cặp đã chọn
+  - Thêm chức năng cấu hình GPIO pins
+  - Ẩn form cũ khi đã chọn device
+
+- Cập nhật router.php
+  - Thêm route /iot/curtains/visual-save
+  - Thêm route /settings/iot/device/{id}/pins
+  - Thêm route /settings/iot/firmware/{id}/raw
+  - Thêm route /settings/iot/firmwares, firmwares/upload, firmware_delete
+  - Thêm route /api/firmware/{device_type}/latest, bin, download/{id}
+  - Thêm route /settings/iot/device/{id}/allocate-firmware, allocations
+
+- Fix lỗi heartbeat MQTT
+  - Sửa topic từ MQTT_TOPIC + "/" + deviceCode thành MQTT_TOPIC + "/heartbeat"
+
+- Fix Firmware compilation error
+  - Tạo endpoint /settings/iot/firmware/{id}/raw để generate firmware từ code
+  - Không dùng database template bị lỗi
+
+- Cập nhật ROUTERS.md với tất cả routes mới
+- Cập nhật VERSION.md v0.1.12
+
+---
+
 ## 2026-03-16
 - Phase 1: Firmware Version Control
   - Thêm cột firmware_version và base_firmware vào device_types

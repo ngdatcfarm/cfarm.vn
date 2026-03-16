@@ -1,5 +1,27 @@
 # Version History - cfarm.vn
 
+## [v0.1.12] - 2026-03-16
+### Added
+- Visual Curtain Configuration
+  - Visual GPIO selection with 8 relay boxes
+  - Click UP first, then DOWN for each curtain pair
+  - Real-time selected pairs display
+  - Add GPIO pin configuration for relay channels
+  - Visual edit mode for GPIO pins
+
+### Changed
+- curtain_setup.php - complete rewrite with visual interface
+- curtain_setup_controller.php - add visual_save endpoint
+- router.php - add /iot/curtains/visual-save route
+- iot_settings_controller.php - add device_pins_save endpoint
+- Hide old form when device is selected
+
+### Database Changes
+- Add gpio_pin column to device_channels table
+- See SQLADD.md for SQL commands
+
+---
+
 ## [v0.1.11] - 2026-03-16
 ### Added
 - IoT Help/Guide Page
