@@ -1,5 +1,12 @@
 # WORK LOG – app.cfarm.vn
 
+## 2026-03-16
+- Phase 1: Firmware Version Control
+  - Thêm cột firmware_version và base_firmware vào device_types
+  - Tạo bảng device_firmware_allocations để tracking
+  - Thêm chức năng cấp phát firmware cho từng device
+  - Hiển thị lịch sử cấp phát trong firmware view
+
 ## 2026-03-15
 - Tạo trang inventory stock by barn
   - Route: /inventory/stock

@@ -1,5 +1,18 @@
 # Version History - cfarm.vn
 
+## [v0.1.8] - 2026-03-16
+### Added
+- Phase 1: Firmware Version Control
+  - Add firmware_version and base_firmware to device_types
+  - Create device_firmware_allocations table
+  - Add firmware allocation history
+  - New UI for version and base firmware editing
+
+### Changed
+- 5 files changed
+
+---
+
 ## [v0.1.7] - 2026-03-15
 ### Added
 - Inventory Stock by Barn view
