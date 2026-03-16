@@ -192,8 +192,9 @@ renderSelection();
 </div>
 <?php endforeach; ?>
 
-<!-- Form thêm bộ bạt -->
-<div id="addForm" class="<?= $barn_id ? '' : 'hidden' ?>">
+<!-- Form thêm bộ bạt (chỉ hiện khi KHÔNG chọn device) -->
+<?php if (!$device_id): ?>
+<div id="addForm">
 <div class="bg-white dark:bg-gray-800 rounded-2xl border border-blue-200 dark:border-blue-800 p-4 mb-3">
     <div class="text-sm font-semibold mb-3">➕ Thêm bộ 4 bạt</div>
     <form method="POST" action="/iot/curtains/store">
@@ -263,6 +264,7 @@ renderSelection();
     </form>
 </div>
 </div>
+<?php endif; // !$device_id ?>
 
 <button onclick="openForm(0)"
         class="w-full text-center text-sm font-semibold py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mb-4">
