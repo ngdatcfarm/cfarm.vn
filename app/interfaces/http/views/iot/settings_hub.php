@@ -80,6 +80,16 @@ ob_start();
         <span class="text-gray-300 text-lg">›</span>
     </a>
 
+    <a href="/settings/iot/help"
+       class="flex items-center gap-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 hover:border-blue-300 transition-colors">
+        <div class="w-12 h-12 bg-gray-50 dark:bg-gray-700 rounded-xl flex items-center justify-center text-2xl">❓</div>
+        <div class="flex-1">
+            <div class="font-semibold text-sm">Hướng dẫn sử dụng IoT</div>
+            <div class="text-xs text-gray-400 mt-0.5">Cách thêm thiết bị, cấu hình và sử dụng</div>
+        </div>
+        <span class="text-gray-300 text-lg">›</span>
+    </a>
+
 </div>
 
 <?php $content = ob_get_clean(); require view_path('layouts/main.php'); ?>

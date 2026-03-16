@@ -1,5 +1,51 @@
 # Version History - cfarm.vn
 
+## [v0.1.11] - 2026-03-16
+### Added
+- IoT Help/Guide Page
+  - New route: /settings/iot/help
+  - Comprehensive documentation for IoT system
+  - Covers: adding devices, device types, curtain setup, control, data flow, MQTT protocol, OTA
+  - Troubleshooting section
+  - Quick links to all IoT pages
+
+### Changed
+- settings_hub.php - add link to help page
+- iot_settings_controller.php - add iot_help method
+- router.php - add /settings/iot/help route
+
+---
+
+## [v0.1.10] - 2026-03-16
+### Added
+- Phase 3: Complete OTA (ESP32 Auto-Update)
+  - OTA code snippet in firmware view with step-by-step instructions
+  - ESPhttpUpdate integration for automatic firmware updates
+  - Direct bin redirect endpoint: /api/firmware/{device_type}/bin
+  - Full URL in ota_check response for easier parsing
+
+### Changed
+- firmware.php - add OTA instructions section
+
+---
+
+## [v0.1.9] - 2026-03-16
+### Added
+- Phase 2: OTA Foundation
+  - Add device_firmwares table for storing firmware binaries
+  - New Firmware Library page (/settings/iot/firmwares)
+  - Upload firmware with version, checksum, notes
+  - Download firmware files
+  - OTA endpoints for ESP32:
+    - GET /api/firmware/{device_type}/latest - check for updates
+    - GET /api/firmware/download/{id} - download firmware
+  - Show available firmwares in device firmware page
+
+### Changed
+- 4 files added, 3 files changed
+
+---
+
 ## [v0.1.8] - 2026-03-16
 ### Added
 - Phase 1: Firmware Version Control

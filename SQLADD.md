@@ -1,5 +1,28 @@
 # SQL Changes for v0.1.x
 
+## Phase 2: OTA Foundation (2026-03-16)
+
+### Create device_firmwares table - lưu trữ firmware binaries
+
+```sql
+CREATE TABLE IF NOT EXISTS device_firmwares (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_type_id INT NOT NULL,
+    version VARCHAR(20) NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size INT DEFAULT 0,
+    checksum VARCHAR(64) DEFAULT NULL,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    uploaded_by VARCHAR(100) DEFAULT 'system',
+    notes TEXT,
+    INDEX idx_type_version (device_type_id, version),
+    INDEX idx_uploaded (uploaded_at)
+);
+```
+
+---
+
 ## Phase 1: Firmware Version Control (2026-03-16)
 
 ### Add firmware_version and base_firmware to device_types

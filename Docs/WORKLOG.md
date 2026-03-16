@@ -7,6 +7,29 @@
   - Thêm chức năng cấp phát firmware cho từng device
   - Hiển thị lịch sử cấp phát trong firmware view
 
+- Phase 2: OTA Foundation
+  - Tạo bảng device_firmwares để lưu trữ firmware binaries
+  - Tạo trang Firmware Library (/settings/iot/firmwares)
+  - Cho phép upload firmware với version, checksum, notes
+  - Tải firmware files
+  - Tạo OTA endpoints cho ESP32:
+    - GET /api/firmware/{device_type}/latest - kiểm tra updates
+    - GET /api/firmware/download/{id} - tải firmware
+  - Hiển thị available firmwares trong device firmware page
+
+- Phase 3: Complete OTA
+  - Thêm code snippet OTA vào firmware view với hướng dẫn chi tiết
+  - Tích hợp ESPhttpUpdate để tự động cập nhật firmware
+  - Thêm endpoint redirect trực tiếp: /api/firmware/{device_type}/bin
+  - Full URL trong ota_check response
+
+- Tạo trang IoT Help/Guide
+  - Route: /settings/iot/help
+  - Hướng dẫn toàn diện về hệ thống IoT
+  - Bao gồm: thêm thiết bị, device types, cài đặt bạt, điều khiển, dòng dữ liệu, MQTT, OTA
+  - Phần khắc phục sự cố
+  - Liên kết nhanh đến các trang IoT
+
 ## 2026-03-15
 - Tạo trang inventory stock by barn
   - Route: /inventory/stock

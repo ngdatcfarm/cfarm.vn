@@ -118,6 +118,41 @@ ob_start();
     <?php endif; ?>
 </div>
 
+<!-- Available Firmwares from Library -->
+<div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-4">
+    <div class="flex items-center justify-between mb-3">
+        <div class="text-sm font-semibold">📚 Firmware Library</div>
+        <a href="/settings/iot/firmwares"
+           class="text-xs text-blue-500 hover:underline">
+           📦 Xem tất cả
+        </a>
+    </div>
+    <?php if (!empty($available_firmwares)): ?>
+    <div class="text-xs space-y-1">
+        <?php foreach ($available_firmwares as $fw): ?>
+        <div class="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-700 last:border-0">
+            <div class="flex items-center gap-2">
+                <span class="font-mono bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-0.5 rounded">v<?= e($fw->version) ?></span>
+                <span class="text-gray-500"><?= number_format($fw->file_size) ?> bytes</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/api/firmware/download/<?= $fw->id ?>" download
+                   class="text-blue-500 hover:text-blue-600 text-xs">
+                   ⬇️ Tải
+                </a>
+                <span class="text-gray-400"><?= date('d/m/y', strtotime($fw->uploaded_at)) ?></span>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php else: ?>
+    <div class="text-xs text-gray-400 italic">
+        Chưa có firmware nào được upload cho loại này.
+        <a href="/settings/iot/firmwares" class="text-blue-500 hover:underline">Upload now</a>
+    </div>
+    <?php endif; ?>
+</div>
+
 <script>
 async function allocateFirmware() {
     if (!confirm('Cấp phát firmware mới cho thiết bị này?')) return;
@@ -293,6 +328,54 @@ function onPinChange() {} // placeholder
         </button>
     </div>
     <pre id="firmware_code" class="bg-gray-900 text-green-400 text-xs p-4 rounded-xl overflow-x-auto max-h-[65vh] overflow-y-auto leading-relaxed"><code><?= e($firmware_code) ?></code></pre>
+</div>
+
+<!-- OTA Instructions -->
+<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-4">
+    <details>
+        <summary class="text-sm font-semibold cursor-pointer">🔄 Hướng dẫn cài đặt OTA (Auto-Update)</summary>
+        <div class="mt-3 text-xs text-gray-500 space-y-2">
+            <div><strong>Bước 1:</strong> Thêm thư viện ESPhttpUpdate vào Arduino IDE:
+                <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">Library Manager → Search "ESP32httpUpdate"</code>
+            </div>
+            <div><strong>Bước 2:</strong> Thêm code sau vào sketch (trước setup):</div>
+            <pre class="bg-gray-900 text-green-400 p-2 rounded overflow-x-auto text-[10px]">// ========== OTA CONFIG ==========
+#include &lt;ESP32HTTPUpdate.h&gt;
+
+#define OTA_CHECK_INTERVAL 3600000  // 1 giờ
+#define FIRMWARE_VERSION "<?= e($device->firmware_version ?? '1.0.0') ?>"
+#define DEVICE_TYPE_ID <?= $device->device_type_id ?? 0 ?>
+
+String otaCheckUrl = String("<?= $_SERVER['HTTP_HOST'] ?? 'app.cfarm.vn' ?>/api/firmware/") + DEVICE_TYPE_ID + "/latest?version=" + FIRMWARE_VERSION;
+
+void handleOTA() {
+    Serial.println("[OTA] Checking for updates...");
+    t_httpUpdate_return ret = ESPhttpUpdate.update(otaCheckUrl);
+    switch(ret) {
+        case HTTP_UPDATE_OK:
+            Serial.println("[OTA] Update successful! Rebooting...");
+            break;
+        case HTTP_UPDATE_NO_UPDATES:
+            Serial.println("[OTA] No updates available");
+            break;
+        case HTTP_UPDATE_FAILED:
+            Serial.printf("[OTA] Update failed: %s\n", ESPhttpUpdate.getLastErrorString().c_str());
+            break;
+    }
+}
+
+unsigned long lastOtaCheck = 0;
+
+// Trong loop(), thêm:
+if (millis() - lastOtaCheck > OTA_CHECK_INTERVAL) {
+    lastOtaCheck = millis();
+    handleOTA();
+}</pre>
+            <div><strong>Bước 3:</strong> Upload firmware đầu tiên qua USB</div>
+            <div><strong>Bước 4:</strong> Các lần sau, upload firmware mới lên Library, ESP32 sẽ tự cập nhật!</div>
+            <div class="text-green-600 mt-2">✅ ESP32 sẽ tự kiểm tra cập nhật mỗi giờ và flash firmware mới khi có</div>
+        </div>
+    </details>
 </div>
 
 <!-- Hướng dẫn -->

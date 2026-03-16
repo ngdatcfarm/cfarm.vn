@@ -73,6 +73,25 @@ class IoTSettingsController
     }
 
     // ================================================================
+    // IoT HELP / GUIDE
+    // ================================================================
+    public function iot_help(array $vars): void
+    {
+        // Get some stats for the help page
+        $stats = [
+            'devices' => (int)$this->pdo->query("SELECT COUNT(*) FROM devices")->fetchColumn(),
+            'device_types' => (int)$this->pdo->query("SELECT COUNT(*) FROM device_types")->fetchColumn(),
+            'curtains' => (int)$this->pdo->query("SELECT COUNT(*) FROM curtain_configs")->fetchColumn(),
+        ];
+
+        $title = 'Hướng dẫn sử dụng IoT';
+        ob_start();
+        require view_path('iot/iot_help.php');
+        $content = ob_get_clean();
+        require view_path('layouts/main.php');
+    }
+
+    // ================================================================
     // CURTAIN CRUD
     // ================================================================
     public function curtain_store(array $vars): void
@@ -304,7 +323,20 @@ class IoTSettingsController
         $curtains->execute([':id' => $device_id, ':id2' => $device_id]);
         $curtains = $curtains->fetchAll(PDO::FETCH_OBJ);
 
-        extract(compact('device', 'channels', 'curtains', 'allocations'));
+        // Lấy các firmware đã upload cho loại thiết bị này
+        $available_firmwares = [];
+        if (!empty($device->device_type_id)) {
+            $fw_stmt = $this->pdo->prepare("
+                SELECT id, version, filename, file_size, uploaded_at, notes
+                FROM device_firmwares
+                WHERE device_type_id = :type_id
+                ORDER BY uploaded_at DESC
+            ");
+            $fw_stmt->execute([':type_id' => $device->device_type_id]);
+            $available_firmwares = $fw_stmt->fetchAll(PDO::FETCH_OBJ);
+        }
+
+        extract(compact('device', 'channels', 'curtains', 'allocations', 'available_firmwares'));
         require view_path('iot/firmware.php');
     }
 
@@ -487,6 +519,235 @@ class IoTSettingsController
 
         header('Content-Type: application/json');
         echo json_encode(['ok' => true, 'allocations' => $allocations]);
+    }
+
+    // ================================================================
+    // FIRMWARE UPLOAD & OTA
+    // ================================================================
+
+    // GET /settings/iot/firmwares — list all uploaded firmwares
+    public function firmwares_index(array $vars): void
+    {
+        $type_id = (int)($_GET['type_id'] ?? 0);
+
+        $sql = "
+            SELECT f.*, dt.name as type_name, dt.device_class
+            FROM device_firmwares f
+            JOIN device_types dt ON dt.id = f.device_type_id
+        ";
+        $params = [];
+        if ($type_id) {
+            $sql .= " WHERE f.device_type_id = :type_id";
+            $params[':type_id'] = $type_id;
+        }
+        $sql .= " ORDER BY f.uploaded_at DESC";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $firmwares = $stmt->fetchAll(PDO::FETCH_OBJ);
+
+        $device_types = $this->pdo->query("
+            SELECT id, name, device_class FROM device_types ORDER BY device_class, name
+        ")->fetchAll(PDO::FETCH_OBJ);
+
+        $title = 'Firmware Library';
+        ob_start();
+        require view_path('iot/firmwares.php');
+        $content = ob_get_clean();
+        require view_path('layouts/main.php');
+    }
+
+    // POST /settings/iot/firmwares/upload — upload new firmware
+    public function firmware_upload(array $vars): void
+    {
+        $type_id = (int)($_POST['device_type_id'] ?? 0);
+        $version = trim($_POST['version'] ?? '');
+        $notes = trim($_POST['notes'] ?? '');
+
+        if (!$type_id || !$version) {
+            $this->json(['ok' => false, 'message' => 'Thiếu thông tin bắt buộc'], 400);
+            return;
+        }
+
+        // Check if file uploaded
+        if (empty($_FILES['firmware_file']['tmp_name'])) {
+            $this->json(['ok' => false, 'message' => 'Chưa chọn file firmware'], 400);
+            return;
+        }
+
+        $file = $_FILES['firmware_file'];
+        $filename = basename($file['name']);
+        $file_size = (int)$file['size'];
+
+        // Create uploads directory if not exists
+        $upload_dir = __DIR__ . '/../../../../../uploads/firmwares';
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0755, true);
+        }
+
+        // Generate unique filename: {type_id}_{version}_{timestamp}.bin
+        $ext = pathinfo($filename, PATHINFO_EXTENSION) ?: 'bin';
+        $new_filename = sprintf('%d_%s_%d.%s', $type_id, $version, time(), $ext);
+        $file_path = $upload_dir . '/' . $new_filename;
+
+        if (!move_uploaded_file($file['tmp_name'], $file_path)) {
+            $this->json(['ok' => false, 'message' => 'Lỗi khi lưu file'], 500);
+            return;
+        }
+
+        // Calculate checksum
+        $checksum = hash_file('sha256', $file_path);
+
+        // Get device type info
+        $type_stmt = $this->pdo->prepare("SELECT name FROM device_types WHERE id = :id");
+        $type_stmt->execute([':id' => $type_id]);
+        $type_name = $type_stmt->fetchColumn() ?: 'Unknown';
+
+        // Save to database
+        $this->pdo->prepare("
+            INSERT INTO device_firmwares
+            (device_type_id, version, filename, file_path, file_size, checksum, uploaded_by, notes)
+            VALUES (:type_id, :version, :filename, :file_path, :size, :checksum, :uploaded_by, :notes)
+        ")->execute([
+            ':type_id' => $type_id,
+            ':version' => $version,
+            ':filename' => $filename,
+            ':file_path' => '/uploads/firmwares/' . $new_filename,
+            ':size' => $file_size,
+            ':checksum' => $checksum,
+            ':uploaded_by' => $_SESSION['user_name'] ?? 'system',
+            ':notes' => $notes
+        ]);
+
+        $this->json(['ok' => true, 'message' => "Đã upload firmware v$version cho $type_name"]);
+    }
+
+    // GET /api/firmware/{device_type}/latest — OTA endpoint for ESP32
+    public function ota_check(array $vars): void
+    {
+        $device_type_id = (int)$vars['device_type'];
+        $current_version = $_GET['version'] ?? '';
+
+        // Get latest firmware for this device type
+        $stmt = $this->pdo->prepare("
+            SELECT id, version, file_path, file_size, checksum, uploaded_at
+            FROM device_firmwares
+            WHERE device_type_id = :type_id
+            ORDER BY uploaded_at DESC
+            LIMIT 1
+        ");
+        $stmt->execute([':type_id' => $device_type_id]);
+        $firmware = $stmt->fetch(PDO::FETCH_OBJ);
+
+        if (!$firmware) {
+            header('Content-Type: application/json');
+            http_response_code(404);
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'No firmware available'
+            ]);
+            exit;
+        }
+
+        // Check if update needed
+        $needs_update = empty($current_version) || version_compare($firmware->version, $current_version, '>');
+
+        // Build full URL for firmware file
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'app.cfarm.vn';
+        $full_file_url = $protocol . '://' . $host . $firmware->file_path;
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status' => $needs_update ? 'update_available' : 'up_to_date',
+            'version' => $firmware->version,
+            'file_url' => $full_file_url,
+            'file_size' => $firmware->file_size,
+            'checksum' => $firmware->checksum,
+            'released_at' => $firmware->uploaded_at
+        ]);
+    }
+
+    // GET /api/firmware/{device_type}/bin — redirect to latest firmware binary
+    public function ota_redirect(array $vars): void
+    {
+        $device_type_id = (int)$vars['device_type'];
+
+        $stmt = $this->pdo->prepare("
+            SELECT file_path FROM device_firmwares
+            WHERE device_type_id = :type_id
+            ORDER BY uploaded_at DESC LIMIT 1
+        ");
+        $stmt->execute([':type_id' => $device_type_id]);
+        $file_path = $stmt->fetchColumn();
+
+        if (!$file_path) {
+            http_response_code(404);
+            exit('No firmware available');
+        }
+
+        // Build full URL and redirect
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'app.cfarm.vn';
+        $full_url = $protocol . '://' . $host . $file_path;
+
+        header('Location: ' . $full_url);
+        exit;
+    }
+
+    // GET /api/firmware/download/{id} — download firmware file
+    public function ota_download(array $vars): void
+    {
+        $firmware_id = (int)$vars['id'];
+
+        $stmt = $this->pdo->prepare("
+            SELECT file_path, filename, file_size, checksum
+            FROM device_firmwares WHERE id = :id
+        ");
+        $stmt->execute([':id' => $firmware_id]);
+        $firmware = $stmt->fetch(PDO::FETCH_OBJ);
+
+        if (!$firmware) {
+            http_response_code(404);
+            exit('Not found');
+        }
+
+        $full_path = __DIR__ . '/../../../../../' . ltrim($firmware->file_path, '/');
+        if (!file_exists($full_path)) {
+            http_response_code(404);
+            exit('File not found');
+        }
+
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $firmware->filename . '"');
+        header('Content-Length: ' . $firmware->file_size);
+        header('X-Checksum-SHA256: ' . $firmware->checksum);
+        readfile($full_path);
+        exit;
+    }
+
+    // POST /settings/iot/firmware/{id}/delete
+    public function firmware_delete(array $vars): void
+    {
+        $firmware_id = (int)$vars['id'];
+
+        // Get file path before deleting record
+        $stmt = $this->pdo->prepare("SELECT file_path FROM device_firmwares WHERE id = :id");
+        $stmt->execute([':id' => $firmware_id]);
+        $file_path = $stmt->fetchColumn();
+
+        // Delete database record
+        $this->pdo->prepare("DELETE FROM device_firmwares WHERE id = :id")->execute([':id' => $firmware_id]);
+
+        // Delete file if exists
+        if ($file_path) {
+            $full_path = __DIR__ . '/../../../../../' . ltrim($file_path, '/');
+            if (file_exists($full_path)) {
+                unlink($full_path);
+            }
+        }
+
+        $this->json(['ok' => true, 'message' => 'Đã xóa firmware']);
     }
 
     // POST /settings/iot/device/{id}/toggle-alert

@@ -62,6 +62,16 @@ try {
             <span class="text-gray-300">›</span>
         </a>
 
+        <a href="/settings/iot/firmwares"
+           class="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <div class="w-11 h-11 bg-purple-50 dark:bg-purple-900/30 rounded-xl flex items-center justify-center text-xl shrink-0">📦</div>
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-semibold">Firmware Library</div>
+                <div class="text-xs text-gray-400 mt-0.5">Quản lý firmware upload & OTA</div>
+            </div>
+            <span class="text-gray-300">›</span>
+        </a>
+
         <a href="/settings/feed-brands"
            class="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
             <div class="w-11 h-11 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center text-xl shrink-0">🌾</div>

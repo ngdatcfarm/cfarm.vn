@@ -229,12 +229,21 @@ $r->addRoute('POST', '/iot/curtain/{id:\d+}/stop',     [DeviceController::class,
 use App\Interfaces\Http\Controllers\Web\IoT\IoTSettingsController;
 use App\Interfaces\Http\Controllers\Web\IoT\CurtainSetupController;
 $r->addRoute('GET',  '/settings/iot',                        [IoTSettingsController::class, 'index']);
+$r->addRoute('GET',  '/settings/iot/help',                   [IoTSettingsController::class, 'iot_help']);
 $r->addRoute('POST', '/settings/iot/curtain/store',          [IoTSettingsController::class, 'curtain_store']);
 $r->addRoute('POST', '/settings/iot/curtain/{id:\d+}/update',[IoTSettingsController::class, 'curtain_update']);
 $r->addRoute('POST', '/settings/iot/curtain/{id:\d+}/delete',[IoTSettingsController::class, 'curtain_delete']);
 
 // IoT Firmware
 $r->addRoute('GET', '/settings/iot/firmware/{device_id:\d+}', [IoTSettingsController::class, 'firmware_code']);
+$r->addRoute('GET', '/settings/iot/firmwares', [IoTSettingsController::class, 'firmwares_index']);
+$r->addRoute('POST', '/settings/iot/firmwares/upload', [IoTSettingsController::class, 'firmware_upload']);
+$r->addRoute('POST', '/settings/iot/firmware/{id:\d+}/delete', [IoTSettingsController::class, 'firmware_delete']);
+
+// OTA Endpoints (for ESP32)
+$r->addRoute('GET', '/api/firmware/{device_type:\d+}/latest', [IoTSettingsController::class, 'ota_check']);
+$r->addRoute('GET', '/api/firmware/{device_type:\d+}/bin', [IoTSettingsController::class, 'ota_redirect']); // Direct redirect to bin
+$r->addRoute('GET', '/api/firmware/download/{id:\d+}', [IoTSettingsController::class, 'ota_download']);
 
 // IoT Device Management
 $r->addRoute('POST', '/settings/iot/device/store',               [IoTSettingsController::class, 'device_store']);
