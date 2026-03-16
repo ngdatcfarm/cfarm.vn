@@ -499,34 +499,6 @@ void setRelay(int ch, bool on) {
         return $firmware;
     }
 
-        $curtains = $this->pdo->prepare("
-            SELECT cc.name,
-                   uc.channel_number as up_ch, dc.channel_number as down_ch
-            FROM curtain_configs cc
-            JOIN device_channels uc ON uc.id = cc.up_channel_id
-            JOIN device_channels dc ON dc.id = cc.down_channel_id
-            WHERE uc.device_id = :id OR dc.device_id = :id2
-        ");
-        $curtains->execute([':id' => $device_id, ':id2' => $device_id]);
-        $curtains = $curtains->fetchAll(PDO::FETCH_OBJ);
-
-        // Lấy các firmware đã upload cho loại thiết bị này
-        $available_firmwares = [];
-        if (!empty($device->device_type_id)) {
-            $fw_stmt = $this->pdo->prepare("
-                SELECT id, version, filename, file_size, uploaded_at, notes
-                FROM device_firmwares
-                WHERE device_type_id = :type_id
-                ORDER BY uploaded_at DESC
-            ");
-            $fw_stmt->execute([':type_id' => $device->device_type_id]);
-            $available_firmwares = $fw_stmt->fetchAll(PDO::FETCH_OBJ);
-        }
-
-        extract(compact('device', 'channels', 'curtains', 'allocations', 'available_firmwares'));
-        require view_path('iot/firmware.php');
-    }
-
     // ================================================================
     // FIRMWARE INTERLOCK AUTO-REBUILD
     // Gọi sau mỗi curtain store/update/delete
