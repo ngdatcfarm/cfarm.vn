@@ -322,10 +322,17 @@ function onPinChange() {} // placeholder
 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-4">
     <div class="flex items-center justify-between mb-3">
         <div class="text-sm font-semibold">📝 Arduino Sketch</div>
-        <button onclick="copyFirmware()"
-                class="<?= str_replace('bg-', 'bg-', $header_color) ?> hover:opacity-90 text-white text-xs font-semibold px-4 py-2 rounded-full">
-            📋 Copy Code
-        </button>
+        <div class="flex gap-2">
+            <a href="/settings/iot/firmware/<?= $device->id ?>/raw"
+               download
+               class="bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">
+                ⬇️ Download .ino
+            </a>
+            <button onclick="copyFirmware()"
+                    class="<?= str_replace('bg-', 'bg-', $header_color) ?> hover:opacity-90 text-white text-xs font-semibold px-4 py-2 rounded-lg">
+                📋 Copy Code
+            </button>
+        </div>
     </div>
     <pre id="firmware_code" class="bg-gray-900 text-green-400 text-xs p-4 rounded-xl overflow-x-auto max-h-[65vh] overflow-y-auto leading-relaxed"><code><?= e($firmware_code) ?></code></pre>
 </div>

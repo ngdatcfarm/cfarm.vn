@@ -236,6 +236,7 @@ $r->addRoute('POST', '/settings/iot/curtain/{id:\d+}/delete',[IoTSettingsControl
 
 // IoT Firmware
 $r->addRoute('GET', '/settings/iot/firmware/{device_id:\d+}', [IoTSettingsController::class, 'firmware_code']);
+$r->addRoute('GET', '/settings/iot/firmware/{device_id:\d+}/raw', [IoTSettingsController::class, 'firmware_raw']);
 $r->addRoute('GET', '/settings/iot/firmwares', [IoTSettingsController::class, 'firmwares_index']);
 $r->addRoute('POST', '/settings/iot/firmwares/upload', [IoTSettingsController::class, 'firmware_upload']);
 $r->addRoute('POST', '/settings/iot/firmware/{id:\d+}/delete', [IoTSettingsController::class, 'firmware_delete']);

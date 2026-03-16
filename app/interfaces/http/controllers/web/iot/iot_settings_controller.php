@@ -310,6 +310,195 @@ class IoTSettingsController
         $channels->execute([':id' => $device_id]);
         $channels = $channels->fetchAll(PDO::FETCH_OBJ);
 
+        // Get device class
+        $device_class = $device->device_class ?? 'relay';
+
+        // Default pins for relay
+        $default_pins = [1=>32, 2=>33, 3=>25, 4=>26, 5=>27, 6=>14, 7=>12, 8=>13];
+        $relay_pins = $default_pins;
+        if (!empty($_GET['pins'])) {
+            $custom = explode(',', $_GET['pins']);
+            if (count($custom) === 8) {
+                foreach ($custom as $i => $p) {
+                    $p = (int)$p;
+                    if ($p > 0 && $p <= 39) $relay_pins[$i+1] = $p;
+                }
+            }
+        }
+
+        // Get curtains for interlock
+        $curtains = $this->pdo->prepare("
+            SELECT cc.name, uc.channel_number as up_ch, dc.channel_number as down_ch
+            FROM curtain_configs cc
+            JOIN device_channels uc ON uc.id = cc.up_channel_id
+            JOIN device_channels dc ON dc.id = cc.down_channel_id
+            WHERE uc.device_id = :id OR dc.device_id = :id2
+        ");
+        $curtains->execute([':id' => $device_id, ':id2' => $device_id]);
+        $curtains = $curtains->fetchAll(PDO::FETCH_OBJ);
+
+        // Get firmwares available for this device type
+        $available_firmwares = [];
+        if (!empty($device->device_type_id)) {
+            $fw_stmt = $this->pdo->prepare("
+                SELECT id, version, filename, file_size, uploaded_at, notes
+                FROM device_firmwares
+                WHERE device_type_id = :type_id
+                ORDER BY uploaded_at DESC
+            ");
+            $fw_stmt->execute([':type_id' => $device->device_type_id]);
+            $available_firmwares = $fw_stmt->fetchAll(PDO::FETCH_OBJ);
+        }
+
+        extract(compact('device', 'channels', 'curtains', 'allocations', 'available_firmwares'));
+        require view_path('iot/firmware.php');
+    }
+
+    // GET /settings/iot/firmware/{device_id}/raw — download clean firmware .ino
+    public function firmware_raw(array $vars): void
+    {
+        $device_id = (int)$vars['device_id'];
+
+        // Get device info
+        $stmt = $this->pdo->prepare("
+            SELECT d.*, dt.device_class, dt.name as type_name
+            FROM devices d
+            LEFT JOIN device_types dt ON dt.id = d.device_type_id
+            WHERE d.id = :id
+        ");
+        $stmt->execute([':id' => $device_id]);
+        $device = $stmt->fetch(PDO::FETCH_OBJ);
+
+        if (!$device) {
+            http_response_code(404);
+            exit('Device not found');
+        }
+
+        $device_class = $device->device_class ?? 'relay';
+
+        // Generate firmware based on device class
+        $code = $this->generateCleanFirmware($device);
+
+        // Return as downloadable file
+        header('Content-Type: text/plain');
+        header('Content-Disposition: attachment; filename="firmware_' . $device->device_code . '.ino"');
+        echo $code;
+        exit;
+    }
+
+    // Generate clean firmware template
+    private function generateCleanFirmware(object $device): string
+    {
+        $device_class = $device->device_class ?? 'relay';
+        $code = $device->device_code ?? 'ESP001';
+
+        // Default pins
+        $pins = [32, 33, 25, 26, 27, 14, 12, 13];
+
+        $firmware = '#include <WiFi.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+
+#define DEVICE_CODE "' . $code . '"
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASS = "YOUR_WIFI_PASS";
+const char* MQTT_SERVER = "app.cfarm.vn";
+const char* MQTT_USER = "cfarm_device";
+const char* MQTT_PASS = "Abc@@123";
+const char* MQTT_TOPIC = "cfarm/' . $code . '";
+
+const int RELAY_PINS[8] = {' . implode(', ', $pins) . '};
+const int INTERLOCK_PAIRS[][2] = {{1,2},{3,4},{5,6},{7,8}};
+const int NUM_INTERLOCKS = 4;
+
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
+unsigned long lastHeartbeat = 0;
+const unsigned long HEARTBEAT_INTERVAL = 30000;
+bool relayState[8] = {false};
+
+void setup() {
+    Serial.begin(115200);
+    for (int i = 0; i < 8; i++) {
+        pinMode(RELAY_PINS[i], OUTPUT);
+        digitalWrite(RELAY_PINS[i], HIGH);
+    }
+    connectWiFi();
+    connectMqtt();
+    Serial.println("Ready!");
+}
+
+void loop() {
+    if (!mqtt.connected()) connectMqtt();
+    mqtt.loop();
+    if (millis() - lastHeartbeat > HEARTBEAT_INTERVAL) {
+        lastHeartbeat = millis();
+        sendHeartbeat();
+    }
+}
+
+void connectWiFi() {
+    Serial.print("Connecting to WiFi");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+    Serial.println(""); Serial.print("IP: "); Serial.println(WiFi.localIP());
+}
+
+void connectMqtt() {
+    mqtt.setServer(MQTT_SERVER, 1883);
+    mqtt.setCallback(mqttCallback);
+    String clientId = "ESP32_" + String(DEVICE_CODE);
+    String willTopic = String(MQTT_TOPIC) + "/status";
+    String willPayload = "{\\"device\\":\\"" + String(DEVICE_CODE) + "\\",\\"status\\":\\"offline\\"}";
+    while (!mqtt.connected()) {
+        if (mqtt.connect(clientId.c_str(), MQTT_USER, MQTT_PASS, willTopic.c_str(), 1, true, willPayload.c_str())) {
+            Serial.println("MQTT connected!");
+            mqtt.subscribe(String(MQTT_TOPIC).c_str());
+            sendHeartbeat();
+        } else { delay(1000); }
+    }
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+    String msg; for (int i = 0; i < length; i++) msg += (char)payload[i];
+    StaticJsonDocument<256> doc;
+    DeserializationError error = deserializeJson(doc, msg);
+    if (error) return;
+    String action = doc["action"] | "";
+    if (action == "relay") {
+        int ch = doc["channel"] | 0;
+        String st = doc["state"] | "";
+        if (ch >= 1 && ch <= 8) setRelay(ch - 1, st == "on");
+    } else if (action == "all") {
+        String st = doc["state"] | "";
+        for (int i = 0; i < 8; i++) setRelay(i, st == "on");
+    }
+}
+
+void sendHeartbeat() {
+    String payload = "{\\"device\\":\\"" + String(DEVICE_CODE) + "\\",\\"status\\":\\"online\\",\\"wifi_rssi\\":" + String(WiFi.RSSI()) + ",\\"ip\\":\\"" + WiFi.localIP().toString() + "\\",\\"uptime\\":" + String(millis()/1000) + ",\\"heap\\":" + String(ESP.getFreeHeap()) + "}";
+    mqtt.publish(String(MQTT_TOPIC).c_str(), payload.c_str(), true);
+}
+
+void setRelay(int ch, bool on) {
+    if (ch < 0 || ch >= 8) return;
+    if (on) {
+        for (int i = 0; i < NUM_INTERLOCKS; i++) {
+            int up = INTERLOCK_PAIRS[i][0] - 1;
+            int down = INTERLOCK_PAIRS[i][1] - 1;
+            if ((ch == up && relayState[down]) || (ch == down && relayState[up])) return;
+        }
+    }
+    digitalWrite(RELAY_PINS[ch], on ? LOW : HIGH);
+    relayState[ch] = on;
+    String payload = "{\\"device\\":\\"" + String(DEVICE_CODE) + "\\",\\"channel\\":" + String(ch+1) + ",\\"state\\":\\"" + String(on?"on":"off") + "\\"}";
+    mqtt.publish((String(MQTT_TOPIC) + "/state").c_str(), payload.c_str());
+}
+';
+
+        return $firmware;
+    }
+
         $curtains = $this->pdo->prepare("
             SELECT cc.name,
                    uc.channel_number as up_ch, dc.channel_number as down_ch
