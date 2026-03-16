@@ -85,10 +85,8 @@ class IoTSettingsController
         ];
 
         $title = 'Hướng dẫn sử dụng IoT';
-        // Render without layout - just output content directly
         ob_start();
         require view_path('iot/iot_help.php');
-        echo ob_get_clean();
     }
 
     // ================================================================
