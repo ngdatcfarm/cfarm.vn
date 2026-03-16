@@ -18,7 +18,125 @@ ob_start();
 <?php endif; ?>
 
 <?php if ($saved): ?>
-<div class="mb-3 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-600">✅ Đã tạo 4 bạt thành công!</div>
+<div class="mb-3 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-600">✅ Đã lưu cấu hình bạt!</div>
+<?php endif; ?>
+
+<!-- Visual GPIO Selection (shown when device is selected) -->
+<?php if (!empty($device_channels) && $barn_id): ?>
+<div class="bg-white dark:bg-gray-800 rounded-2xl border border-green-200 dark:border-green-800 p-4 mb-4">
+    <div class="text-sm font-semibold mb-3">🔌 Chọn cặp LÊN/XUỐNG cho 4 bạt</div>
+    <div class="text-xs text-gray-400 mb-3">
+        Click vào GPIO để chọn cặp: Click LÊN trước → Click XUỐNG
+    </div>
+
+    <!-- 8 Relay Boxes -->
+    <div class="grid grid-cols-4 gap-2 mb-4">
+        <?php foreach ($device_channels as $ch): ?>
+        <div class="relay-box text-center p-3 rounded-xl border-2 cursor-pointer transition-all
+                    <?= in_array($ch->id, $selected_up ?? []) ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : '' ?>
+                    <?= in_array($ch->id, $selected_down ?? []) ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : '' ?>
+                    bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-blue-400"
+             onclick="toggleRelay(<?= $ch->id ?>, '<?= $ch->channel_number ?>')">
+            <div class="text-lg font-bold">CH<?= $ch->channel_number ?></div>
+            <div class="text-xs text-gray-400">Relay #<?= $ch->channel_number ?></div>
+            <div class="text-xs mt-1 status-indicator">
+                <?php if (in_array($ch->id, $selected_up ?? [])): ?>
+                <span class="text-green-600 font-bold">↑ LÊN</span>
+                <?php elseif (in_array($ch->id, $selected_down ?? [])): ?>
+                <span class="text-red-600 font-bold">↓ XUỐNG</span>
+                <?php else: ?>
+                <span class="text-gray-400">—</span>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+
+    <!-- Selected Pairs Display -->
+    <div class="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
+        <div class="text-xs font-semibold text-yellow-700 dark:text-yellow-300 mb-2">Các cặp đã chọn:</div>
+        <div id="selectedPairs" class="space-y-1 text-xs">
+            <!-- Dynamic content -->
+        </div>
+    </div>
+
+    <form method="POST" action="/iot/curtains/visual-save">
+        <input type="hidden" name="barn_id" value="<?= $barn_id ?>">
+        <input type="hidden" name="device_id" value="<?= $device_id ?>">
+        <input type="hidden" name="pairs" id="pairsJson">
+        <button type="submit" id="saveBtn" disabled
+                class="w-full py-2 text-sm font-semibold bg-green-600 text-white rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed">
+            💾 Lưu cấu hình 4 bạt
+        </button>
+    </form>
+</div>
+
+<script>
+let selectedUp = [];
+let selectedDown = [];
+const channelData = {};
+
+<?php foreach ($device_channels as $ch): ?>
+channelData[<?= $ch->id ?>] = {ch: <?= $ch->channel_number ?>};
+<?php endforeach; ?>
+
+function toggleRelay(id, ch) {
+    if (selectedUp.includes(id)) {
+        // Already selected as UP, remove
+        selectedUp = selectedUp.filter(x => x !== id);
+    } else if (selectedDown.includes(id)) {
+        // Already selected as DOWN, remove
+        selectedDown = selectedDown.filter(x => x !== id);
+    } else if (selectedUp.length > selectedDown.length) {
+        // Next should be DOWN
+        selectedDown.push(id);
+    } else {
+        // Next should be UP
+        selectedUp.push(id);
+    }
+    renderSelection();
+}
+
+function renderSelection() {
+    const pairs = [];
+    const minLen = Math.min(selectedUp.length, selectedDown.length);
+
+    for (let i = 0; i < minLen; i++) {
+        const up = channelData[selectedUp[i]];
+        const down = channelData[selectedDown[i]];
+        pairs.push(`Bạt ${i+1}: CH${up?.ch} ↑ + CH${down?.ch} ↓`);
+    }
+
+    document.getElementById('selectedPairs').innerHTML = pairs.map(p =>
+        `<div class="text-gray-600 dark:text-gray-300">${p}</div>`
+    ).join('') || '<div class="text-gray-400">Click LÊN trước, rồi đến XUỐNG cho 4 cặp bạt</div>';
+
+    // Update visual boxes
+    document.querySelectorAll('.relay-box').forEach(box => {
+        const id = parseInt(box.getAttribute('onclick').match(/\d+/)[0]);
+        box.classList.remove('border-green-500', 'bg-green-50', 'dark:bg-green-900/20',
+                           'border-red-500', 'bg-red-50', 'dark:bg-red-900/20');
+        if (selectedUp.includes(id)) {
+            box.classList.add('border-green-500', 'bg-green-50', 'dark:bg-green-900/20');
+        } else if (selectedDown.includes(id)) {
+            box.classList.add('border-red-500', 'bg-red-50', 'dark:bg-red-900/20');
+        }
+    });
+
+    // Enable save if we have 4 pairs
+    document.getElementById('saveBtn').disabled = minLen < 4;
+
+    // Prepare JSON
+    const pairsArray = [];
+    for (let i = 0; i < minLen; i++) {
+        pairsArray.push({up: selectedUp[i], down: selectedDown[i]});
+    }
+    document.getElementById('pairsJson').value = JSON.stringify(pairsArray);
+}
+
+// Initialize
+renderSelection();
+</script>
 <?php endif; ?>
 
 <!-- Bạt hiện tại theo barn -->

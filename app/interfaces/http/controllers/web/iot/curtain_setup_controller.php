@@ -37,6 +37,46 @@ class CurtainSetupController
         $error   = $_GET['error']  ?? null;
         $saved   = $_GET['saved']  ?? null;
         $barn_id = (int)($_GET['barn_id'] ?? 0) ?: null;
+        $device_id = (int)($_GET['device_id'] ?? 0) ?: null;
+
+        // Get device channels with pins if device selected
+        $device_channels = [];
+        $selected_up = [];
+        $selected_down = [];
+        if ($device_id) {
+            $stmt = $this->pdo->prepare("
+                SELECT dc.*, d.device_code, d.name as device_name
+                FROM device_channels dc
+                JOIN devices d ON d.id = dc.device_id
+                WHERE dc.device_id = :device_id
+                ORDER BY dc.channel_number
+            ");
+            $stmt->execute([':device_id' => $device_id]);
+            $device_channels = $stmt->fetchAll(PDO::FETCH_OBJ);
+
+            // Get existing curtain assignments
+            if ($barn_id) {
+                $curtain_stmt = $this->pdo->prepare("
+                    SELECT cc.up_channel_id, cc.down_channel_id
+                    FROM curtain_configs cc
+                    WHERE cc.barn_id = :barn_id
+                ");
+                $curtain_stmt->execute([':barn_id' => $barn_id]);
+                $existing = $curtain_stmt->fetchAll(PDO::FETCH_OBJ);
+                foreach ($existing as $c) {
+                    $selected_up[] = $c->up_channel_id;
+                    $selected_down[] = $c->down_channel_id;
+                }
+            }
+
+            // Auto-select barn from device
+            if ($device_channels && empty($barn_id)) {
+                $first = reset($device_channels);
+                $barn_stmt = $this->pdo->prepare("SELECT barn_id FROM devices WHERE id = :id");
+                $barn_stmt->execute([':id' => $device_id]);
+                $barn_id = (int)$barn_stmt->fetchColumn();
+            }
+        }
 
         // Pre-load curtains cho từng barn
         $curtains_by_barn = [];
@@ -54,7 +94,49 @@ class CurtainSetupController
             $curtains_by_barn[$b->id] = $stmt->fetchAll(PDO::FETCH_OBJ);
         }
 
+        // Pass variables to view
+        extract(compact('barns', 'relay_devices', 'curtains_by_barn', 'error', 'saved', 'barn_id', 'device_id', 'device_channels', 'selected_up', 'selected_down'));
         require view_path('iot/curtain_setup.php');
+    }
+
+    // POST /iot/curtains/visual-save — lưu cặp bạt đã chọn
+    public function visual_save(array $vars): void
+    {
+        $barn_id = (int)($_POST['barn_id'] ?? 0);
+        $device_id = (int)($_POST['device_id'] ?? 0);
+        $pairs = $_POST['pairs'] ?? []; // Array of [up_channel_id, down_channel_id]
+
+        if (!$barn_id || !$device_id || empty($pairs)) {
+            header('Location: /iot/curtains/setup?error=missing_fields');
+            exit;
+        }
+
+        // Xóa các bạt cũ của barn này
+        $this->pdo->prepare("
+            DELETE cc FROM curtain_configs cc
+            JOIN device_channels dc ON dc.id = cc.up_channel_id
+            WHERE dc.device_id = :device_id AND cc.barn_id = :barn_id
+        ")->execute([':device_id' => $device_id, ':barn_id' => $barn_id]);
+
+        // Thêm các cặp mới
+        foreach ($pairs as $i => $pair) {
+            $up_id = (int)($pair['up'] ?? 0);
+            $dn_id = (int)($pair['down'] ?? 0);
+            if ($up_id && $dn_id) {
+                $this->pdo->prepare("
+                    INSERT INTO curtain_configs (name, barn_id, up_channel_id, down_channel_id, full_up_seconds, full_down_seconds)
+                    VALUES (:name, :barn_id, :up, :down, 30, 30)
+                ")->execute([
+                    ':name' => 'Bạt ' . ($i + 1),
+                    ':barn_id' => $barn_id,
+                    ':up' => $up_id,
+                    ':down' => $dn_id
+                ]);
+            }
+        }
+
+        header('Location: /iot/curtains/setup?device_id=' . $device_id . '&saved=1');
+        exit;
     }
 
     // POST /iot/curtains/store — tạo 4 bạt tự động

@@ -233,6 +233,14 @@ async function allocateFirmware() {
         </div>
         <?php endforeach; ?>
     </div>
+
+    <!-- Quick link to curtain setup -->
+    <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+        <a href="/iot/curtains/setup?device_id=<?= $device->id ?>"
+           class="block w-full text-center text-xs font-semibold py-2 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/40">
+            🪟 Cấu hình bạt cho chuồng này
+        </a>
+    </div>
 </div>
 
 <script>

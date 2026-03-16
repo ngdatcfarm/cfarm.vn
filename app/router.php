@@ -284,6 +284,7 @@ $r->addRoute('POST', '/iot/nodes/store',  [IoTSettingsController::class, 'node_s
 // Curtain Setup Wizard
 $r->addRoute('GET',  '/iot/curtains/setup',        [CurtainSetupController::class, 'setup']);
 $r->addRoute('POST', '/iot/curtains/store',         [CurtainSetupController::class, 'store']);
+$r->addRoute('POST', '/iot/curtains/visual-save',   [CurtainSetupController::class, 'visual_save']);
 $r->addRoute('GET',  '/iot/curtains/{id:\d+}/edit', [CurtainSetupController::class, 'edit']);
 $r->addRoute('POST', '/iot/curtains/{id:\d+}/update',[CurtainSetupController::class, 'update']);
 $r->addRoute('POST', '/iot/curtains/{id:\d+}/delete',[CurtainSetupController::class, 'delete']);
