@@ -453,7 +453,8 @@ void connectMqtt() {
     while (!mqtt.connected()) {
         if (mqtt.connect(clientId.c_str(), MQTT_USER, MQTT_PASS, willTopic.c_str(), 1, true, willPayload.c_str())) {
             Serial.println("MQTT connected!");
-            mqtt.subscribe(String(MQTT_TOPIC).c_str());
+            mqtt.subscribe((String(MQTT_TOPIC) + "/command").c_str());
+            mqtt.subscribe((String(MQTT_TOPIC) + "/set").c_str());
             sendHeartbeat();
         } else { delay(1000); }
     }
@@ -477,7 +478,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
 void sendHeartbeat() {
     String payload = "{\\"device\\":\\"" + String(DEVICE_CODE) + "\\",\\"status\\":\\"online\\",\\"wifi_rssi\\":" + String(WiFi.RSSI()) + ",\\"ip\\":\\"" + WiFi.localIP().toString() + "\\",\\"uptime\\":" + String(millis()/1000) + ",\\"heap\\":" + String(ESP.getFreeHeap()) + "}";
-    mqtt.publish(String(MQTT_TOPIC).c_str(), payload.c_str(), true);
+    String heartbeatTopic = String(MQTT_TOPIC) + "/heartbeat";
+    mqtt.publish(heartbeatTopic.c_str(), payload.c_str(), true);
 }
 
 void setRelay(int ch, bool on) {
