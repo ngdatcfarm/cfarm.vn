@@ -249,6 +249,7 @@ $r->addRoute('GET', '/api/firmware/download/{id:\d+}', [IoTSettingsController::c
 // IoT Device Management
 $r->addRoute('POST', '/settings/iot/device/store',               [IoTSettingsController::class, 'device_store']);
 $r->addRoute('POST', '/settings/iot/device/{id:\d+}/update',   [IoTSettingsController::class, 'device_update']);
+$r->addRoute('POST', '/settings/iot/device/{id:\d+}/pins',     [IoTSettingsController::class, 'device_pins_save']);
 $r->addRoute('POST', '/settings/iot/device/{id:\d+}/delete',   [IoTSettingsController::class, 'device_delete']);
 
 

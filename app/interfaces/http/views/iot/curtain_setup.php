@@ -29,6 +29,37 @@ ob_start();
         Click vào GPIO để chọn cặp: Click LÊN trước → Click XUỐNG
     </div>
 
+    <!-- Pin Configuration -->
+    <div class="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
+        <div class="flex items-center justify-between mb-2">
+            <div class="text-xs font-semibold text-yellow-700 dark:text-yellow-300">
+                🔌 Cấu hình GPIO Pins
+            </div>
+            <button onclick="togglePinEdit()" id="pinEditBtn" class="text-xs text-blue-500">✏️ Sửa</button>
+        </div>
+        <div id="pinDisplay" class="grid grid-cols-4 gap-2 text-xs">
+            <?php foreach ($device_channels as $ch): ?>
+            <div class="text-center py-1 bg-white dark:bg-gray-800 rounded">
+                CH<?= $ch->channel_number %> → <span class="font-mono font-bold">GPIO <?= $ch->gpio_pin ?? '—' ?></span>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <div id="pinEditor" class="hidden grid grid-cols-4 gap-2">
+            <?php foreach ($device_channels as $ch): ?>
+            <div class="text-center">
+                <div class="text-xs text-gray-400 mb-1">CH<?= $ch->channel_number ?></div>
+                <input type="number" id="pin_<?= $ch->id ?>" value="<?= $ch->gpio_pin ?? '' ?>"
+                       min="0" max="39" placeholder="GPIO"
+                       class="w-full text-center border rounded py-1 text-xs font-mono">
+            </div>
+            <?php endforeach; ?>
+            <button onclick="savePins(<?= $device_id ?>)"
+                    class="col-span-4 bg-blue-600 text-white text-xs py-2 rounded mt-2">
+                💾 Lưu pins
+            </button>
+        </div>
+    </div>
+
     <!-- 8 Relay Boxes -->
     <div class="grid grid-cols-4 gap-2 mb-4">
         <?php foreach ($device_channels as $ch): ?>
@@ -38,7 +69,7 @@ ob_start();
                     bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-blue-400"
              onclick="toggleRelay(<?= $ch->id ?>, '<?= $ch->channel_number ?>')">
             <div class="text-lg font-bold">CH<?= $ch->channel_number ?></div>
-            <div class="text-xs text-gray-400">Relay #<?= $ch->channel_number ?></div>
+            <div class="text-xs text-gray-400">GPIO <?= $ch->gpio_pin ?? '—' ?></div>
             <div class="text-xs mt-1 status-indicator">
                 <?php if (in_array($ch->id, $selected_up ?? [])): ?>
                 <span class="text-green-600 font-bold">↑ LÊN</span>
@@ -77,7 +108,7 @@ let selectedDown = [];
 const channelData = {};
 
 <?php foreach ($device_channels as $ch): ?>
-channelData[<?= $ch->id ?>] = {ch: <?= $ch->channel_number ?>};
+channelData[<?= $ch->id ?>] = {ch: <?= $ch->channel_number ?>, gpio: <?= $ch->gpio_pin ?? 0 ?>};
 <?php endforeach; ?>
 
 function toggleRelay(id, ch) {
@@ -97,6 +128,45 @@ function toggleRelay(id, ch) {
     renderSelection();
 }
 
+function togglePinEdit() {
+    const display = document.getElementById('pinDisplay');
+    const editor = document.getElementById('pinEditor');
+    const btn = document.getElementById('pinEditBtn');
+    if (editor.classList.contains('hidden')) {
+        editor.classList.remove('hidden');
+        display.classList.add('hidden');
+        btn.textContent = '✖ Đóng';
+    } else {
+        editor.classList.add('hidden');
+        display.classList.remove('hidden');
+        btn.textContent = '✏️ Sửa';
+    }
+}
+
+async function savePins(deviceId) {
+    const pins = {};
+    <?php foreach ($device_channels as $ch): ?>
+    pins[<?= $ch->id ?>] = document.getElementById('pin_<?= $ch->id ?>').value;
+    <?php endforeach; ?>
+
+    try {
+        const r = await fetch('/settings/iot/device/' + deviceId + '/pins', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+            body: JSON.stringify(pins)
+        });
+        const d = await r.json();
+        if (d.ok) {
+            alert('✅ Đã lưu GPIO pins!');
+            location.reload();
+        } else {
+            alert('❌ ' + d.message);
+        }
+    } catch(e) {
+        alert('❌ Lỗi kết nối');
+    }
+}
+
 function renderSelection() {
     const pairs = [];
     const minLen = Math.min(selectedUp.length, selectedDown.length);
@@ -104,7 +174,7 @@ function renderSelection() {
     for (let i = 0; i < minLen; i++) {
         const up = channelData[selectedUp[i]];
         const down = channelData[selectedDown[i]];
-        pairs.push(`Bạt ${i+1}: CH${up?.ch} ↑ + CH${down?.ch} ↓`);
+        pairs.push(`Bạt ${i+1}: CH${up?.ch} (GPIO ${up?.gpio}) ↑ → CH${down?.ch} (GPIO ${down?.gpio}) ↓`);
     }
 
     document.getElementById('selectedPairs').innerHTML = pairs.map(p =>

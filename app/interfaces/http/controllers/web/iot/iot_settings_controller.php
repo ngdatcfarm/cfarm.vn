@@ -219,6 +219,30 @@ class IoTSettingsController
         header('Location: /settings/iot?tab=devices'); exit;
     }
 
+    // POST /settings/iot/device/{id}/pins - save GPIO pins for channels
+    public function device_pins_save(array $vars): void
+    {
+        $device_id = (int)$vars['id'];
+        $pins = json_decode(file_get_contents('php://input'), true);
+
+        if (!is_array($pins)) {
+            $this->json(['ok' => false, 'message' => 'Invalid data']);
+            return;
+        }
+
+        $stmt = $this->pdo->prepare("UPDATE device_channels SET gpio_pin = :pin WHERE id = :id AND device_id = :device_id");
+
+        foreach ($pins as $channel_id => $pin) {
+            $stmt->execute([
+                ':pin' => $pin ? (int)$pin : null,
+                ':id' => (int)$channel_id,
+                ':device_id' => $device_id
+            ]);
+        }
+
+        $this->json(['ok' => true, 'message' => 'Pins saved']);
+    }
+
     public function device_delete(array $vars): void
     {
         $id = (int)$vars['id'];

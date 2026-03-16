@@ -1,5 +1,25 @@
 # SQL Changes for v0.1.x
 
+## Add gpio_pin to device_channels (2026-03-16)
+
+```sql
+-- Thêm cột gpio_pin để lưu GPIO pin cho từng kênh relay
+ALTER TABLE device_channels
+ADD COLUMN gpio_pin INT NULL AFTER channel_number;
+
+-- Cập nhật pins mặc định cho các kênh relay (CH1-8 = GPIO 32,33,25,26,27,14,12,13)
+UPDATE device_channels SET gpio_pin = 32 WHERE channel_number = 1;
+UPDATE device_channels SET gpio_pin = 33 WHERE channel_number = 2;
+UPDATE device_channels SET gpio_pin = 25 WHERE channel_number = 3;
+UPDATE device_channels SET gpio_pin = 26 WHERE channel_number = 4;
+UPDATE device_channels SET gpio_pin = 27 WHERE channel_number = 5;
+UPDATE device_channels SET gpio_pin = 14 WHERE channel_number = 6;
+UPDATE device_channels SET gpio_pin = 12 WHERE channel_number = 7;
+UPDATE device_channels SET gpio_pin = 13 WHERE channel_number = 8;
+```
+
+---
+
 ## Phase 2: OTA Foundation (2026-03-16)
 
 ### Create device_firmwares table - lưu trữ firmware binaries
