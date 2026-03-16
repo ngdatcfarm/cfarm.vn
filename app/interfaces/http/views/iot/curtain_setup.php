@@ -40,20 +40,20 @@ ob_start();
         <div id="pinDisplay" class="grid grid-cols-4 gap-2 text-xs">
             <?php foreach ($device_channels as $ch): ?>
             <div class="text-center py-1 bg-white dark:bg-gray-800 rounded">
-                CH<?= $ch->channel_number %> → <span class="font-mono font-bold">GPIO <?= $ch->gpio_pin ?? '—' ?></span>
+                CH<?php echo  $ch->channel_number %> → <span class="font-mono font-bold">GPIO <?php echo  (isset($ch->gpio_pin) ? $ch->gpio_pin : \'—\') ?></span>
             </div>
             <?php endforeach; ?>
         </div>
         <div id="pinEditor" class="hidden grid grid-cols-4 gap-2">
             <?php foreach ($device_channels as $ch): ?>
             <div class="text-center">
-                <div class="text-xs text-gray-400 mb-1">CH<?= $ch->channel_number ?></div>
-                <input type="number" id="pin_<?= $ch->id ?>" value="<?= $ch->gpio_pin ?? '' ?>"
+                <div class="text-xs text-gray-400 mb-1">CH<?php echo  $ch->channel_number ?></div>
+                <input type="number" id="pin_<?php echo  $ch->id ?>" value="<?php echo  (isset($ch->gpio_pin) ? $ch->gpio_pin : \'\') ?>"
                        min="0" max="39" placeholder="GPIO"
                        class="w-full text-center border rounded py-1 text-xs font-mono">
             </div>
             <?php endforeach; ?>
-            <button onclick="savePins(<?= $device_id ?>)"
+            <button onclick="savePins(<?php echo  $device_id ?>)"
                     class="col-span-4 bg-blue-600 text-white text-xs py-2 rounded mt-2">
                 💾 Lưu pins
             </button>
@@ -64,16 +64,16 @@ ob_start();
     <div class="grid grid-cols-4 gap-2 mb-4">
         <?php foreach ($device_channels as $ch): ?>
         <div class="relay-box text-center p-3 rounded-xl border-2 cursor-pointer transition-all
-                    <?= in_array($ch->id, $selected_up ?? []) ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : '' ?>
-                    <?= in_array($ch->id, $selected_down ?? []) ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : '' ?>
+                    <?php echo  in_array($ch->id, (isset($selected_up) ? $selected_up : [])) ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : '' ?>
+                    <?php echo  in_array($ch->id, (isset($selected_down) ? $selected_down : [])) ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : '' ?>
                     bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-blue-400"
-             onclick="toggleRelay(<?= $ch->id ?>, '<?= $ch->channel_number ?>')">
-            <div class="text-lg font-bold">CH<?= $ch->channel_number ?></div>
-            <div class="text-xs text-gray-400">GPIO <?= $ch->gpio_pin ?? '—' ?></div>
+             onclick="toggleRelay(<?php echo  $ch->id ?>, '<?php echo  $ch->channel_number ?>')">
+            <div class="text-lg font-bold">CH<?php echo  $ch->channel_number ?></div>
+            <div class="text-xs text-gray-400">GPIO <?php echo  (isset($ch->gpio_pin) ? $ch->gpio_pin : \'—\') ?></div>
             <div class="text-xs mt-1 status-indicator">
-                <?php if (in_array($ch->id, $selected_up ?? [])): ?>
+                <?php if (in_array($ch->id, (isset($selected_up) ? $selected_up : []))): ?>
                 <span class="text-green-600 font-bold">↑ LÊN</span>
-                <?php elseif (in_array($ch->id, $selected_down ?? [])): ?>
+                <?php elseif (in_array($ch->id, (isset($selected_down) ? $selected_down : []))): ?>
                 <span class="text-red-600 font-bold">↓ XUỐNG</span>
                 <?php else: ?>
                 <span class="text-gray-400">—</span>
@@ -92,8 +92,8 @@ ob_start();
     </div>
 
     <form method="POST" action="/iot/curtains/visual-save">
-        <input type="hidden" name="barn_id" value="<?= $barn_id ?>">
-        <input type="hidden" name="device_id" value="<?= $device_id ?>">
+        <input type="hidden" name="barn_id" value="<?php echo  $barn_id ?>">
+        <input type="hidden" name="device_id" value="<?php echo  $device_id ?>">
         <input type="hidden" name="pairs" id="pairsJson">
         <button type="submit" id="saveBtn" disabled
                 class="w-full py-2 text-sm font-semibold bg-green-600 text-white rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed">
@@ -108,7 +108,7 @@ let selectedDown = [];
 const channelData = {};
 
 <?php foreach ($device_channels as $ch): ?>
-channelData[<?= $ch->id ?>] = {ch: <?= $ch->channel_number ?>, gpio: <?= $ch->gpio_pin ?? 0 ?>};
+channelData[<?php echo  $ch->id ?>] = {ch: <?php echo  $ch->channel_number ?>, gpio: <?php echo  (isset($ch->gpio_pin) ? $ch->gpio_pin : \'0\') ?>};
 <?php endforeach; ?>
 
 function toggleRelay(id, ch) {
@@ -146,7 +146,7 @@ function togglePinEdit() {
 async function savePins(deviceId) {
     const pins = {};
     <?php foreach ($device_channels as $ch): ?>
-    pins[<?= $ch->id ?>] = document.getElementById('pin_<?= $ch->id ?>').value;
+    pins[<?php echo  $ch->id ?>] = document.getElementById('pin_<?php echo  $ch->id ?>').value;
     <?php endforeach; ?>
 
     try {
@@ -211,17 +211,17 @@ renderSelection();
 
 <!-- Bạt hiện tại theo barn -->
 <?php foreach ($barns as $b): ?>
-<?php $curtains = $curtains_by_barn[$b->id] ?? []; ?>
+<?php $curtains = (isset($curtains_by_barn[$b->id]) ? $curtains_by_barn[$b->id] : []); ?>
 <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-3">
     <div class="flex items-center justify-between mb-3">
         <div>
-            <div class="font-semibold text-sm"><?= htmlspecialchars($b->name) ?></div>
+            <div class="font-semibold text-sm"><?php echo  htmlspecialchars($b->name) ?></div>
             <?php if ($b->active_cycle): ?>
-            <div class="text-xs text-gray-400">Chu kỳ: <?= htmlspecialchars($b->active_cycle) ?></div>
+            <div class="text-xs text-gray-400">Chu kỳ: <?php echo  htmlspecialchars($b->active_cycle) ?></div>
             <?php endif; ?>
         </div>
-        <span class="text-xs <?= count($curtains) >= 4 ? 'text-green-500' : 'text-gray-400' ?>">
-            <?= count($curtains) ?>/4 bạt
+        <span class="text-xs <?php echo  count($curtains) >= 4 ? 'text-green-500' : 'text-gray-400' ?>">
+            <?php echo  count($curtains) ?>/4 bạt
         </span>
     </div>
 
@@ -232,19 +232,19 @@ renderSelection();
         <?php foreach ($curtains as $cc): ?>
         <div class="flex items-center justify-between text-sm py-2 border-t border-gray-100 dark:border-gray-700">
             <div>
-                <span class="font-medium">🪟 <?= htmlspecialchars($cc->name) ?></span>
+                <span class="font-medium">🪟 <?php echo  htmlspecialchars($cc->name) ?></span>
                 <span class="text-xs text-gray-400 ml-2">
-                    <?= $cc->relay_code ?> · CH<?= $cc->up_ch ?>↑ CH<?= $cc->dn_ch ?>↓
+                    <?php echo  $cc->relay_code ?> · CH<?php echo  $cc->up_ch ?>↑ CH<?php echo  $cc->dn_ch ?>↓
                 </span>
-                <span class="text-xs ml-2 <?= $cc->moving_state !== 'idle' ? 'text-blue-500' : 'text-gray-400' ?>">
-                    <?= $cc->current_position_pct ?>%
+                <span class="text-xs ml-2 <?php echo  $cc->moving_state !== 'idle' ? 'text-blue-500' : 'text-gray-400' ?>">
+                    <?php echo  $cc->current_position_pct ?>%
                 </span>
             </div>
             <div class="flex gap-2">
-                <a href="/iot/curtains/<?= $cc->id ?>/edit"
+                <a href="/iot/curtains/<?php echo  $cc->id ?>/edit"
                    class="text-xs text-blue-500 hover:underline">✏️ Sửa</a>
-                <form method="POST" action="/iot/curtains/<?= $cc->id ?>/delete"
-                      onsubmit="return confirm('Xóa bạt <?= htmlspecialchars($cc->name) ?>?')">
+                <form method="POST" action="/iot/curtains/<?php echo  $cc->id ?>/delete"
+                      onsubmit="return confirm('Xóa bạt <?php echo  htmlspecialchars($cc->name) ?>?')">
                     <button type="submit" class="text-xs text-red-400 hover:text-red-600">🗑️</button>
                 </form>
             </div>
@@ -254,9 +254,9 @@ renderSelection();
     <?php endif; ?>
 
     <?php if (count($curtains) < 4): ?>
-    <button onclick="openForm(<?= $b->id ?>)"
+    <button onclick="openForm(<?php echo  $b->id ?>)"
             class="w-full text-center text-xs font-semibold py-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600">
-        + Thêm bộ <?= 4 - count($curtains) ?> bạt còn lại
+        + Thêm bộ <?php echo  4 - count($curtains) ?> bạt còn lại
     </button>
     <?php endif; ?>
 </div>
@@ -275,8 +275,8 @@ renderSelection();
                     class="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700">
                 <option value="">— Chọn chuồng —</option>
                 <?php foreach ($barns as $b): ?>
-                <option value="<?= $b->id ?>" <?= $barn_id == $b->id ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($b->name) ?>
+                <option value="<?php echo  $b->id ?>" <?php echo  $barn_id == $b->id ? 'selected' : '' ?>>
+                    <?php echo  htmlspecialchars($b->name) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -288,11 +288,11 @@ renderSelection();
                     class="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700">
                 <option value="">— Chọn relay —</option>
                 <?php foreach ($relay_devices as $d): ?>
-                <option value="<?= $d->id ?>"
-                        data-barn="<?= $d->barn_id ?>"
-                        data-free="<?= $d->total_ch - $d->used_ch ?>">
-                    <?= htmlspecialchars($d->name) ?> · <?= $d->barn_name ?? 'Chưa gán' ?>
-                    · <?= $d->total_ch - $d->used_ch ?> kênh trống
+                <option value="<?php echo  $d->id ?>"
+                        data-barn="<?php echo  $d->barn_id ?>"
+                        data-free="<?php echo  $d->total_ch - $d->used_ch ?>">
+                    <?php echo  htmlspecialchars($d->name) ?> · <?php echo  (isset($d->barn_name) ? $d->barn_name : \'Chưa\') gán' ?>
+                    · <?php echo  $d->total_ch - $d->used_ch ?> kênh trống
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -306,8 +306,8 @@ renderSelection();
                 for ($i = 0; $i < 4; $i++):
                 ?>
                 <input type="text" name="curtain_names[]"
-                       value="<?= $default_names[$i] ?>" required
-                       placeholder="Bạt <?= $i+1 ?>"
+                       value="<?php echo  $default_names[$i] ?>" required
+                       placeholder="Bạt <?php echo  $i+1 ?>"
                        class="border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-gray-700">
                 <?php endfor; ?>
             </div>
