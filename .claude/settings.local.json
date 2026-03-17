@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:\\\\dev\\\\cfarm.vn\" && php -r \"\n\\\\$file = file_get_contents\\('app/interfaces/http/views/iot/curtain_setup.php'\\);\n\\\\$file = preg_replace\\('/<\\\\?= \\(.*?\\) \\\\?>/', '<?php echo \\\\$1 ?>', \\\\$file\\);\nfile_put_contents\\('app/interfaces/http/views/iot/curtain_setup.php', \\\\$file\\);\necho 'Done';\n\")",
+      "Bash(cd \"C:\\\\dev\\\\cfarm.vn\" && python fix_null_coalesce.py)"
+    ]
+  }
+}

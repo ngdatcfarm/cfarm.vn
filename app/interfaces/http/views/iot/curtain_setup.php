@@ -21,43 +21,49 @@ ob_start();
 <div class="mb-3 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-600">✅ Đã lưu cấu hình bạt!</div>
 <?php endif; ?>
 
-<!-- Visual GPIO Selection (shown when device is selected) -->
-<?php if (!empty($device_channels) && $barn_id): ?>
-<div class="bg-white dark:bg-gray-800 rounded-2xl border border-green-200 dark:border-green-800 p-4 mb-4">
-    <div class="text-sm font-semibold mb-3">🔌 Chọn cặp LÊN/XUỐNG cho 4 bạt</div>
-    <div class="text-xs text-gray-400 mb-3">
-        Click vào GPIO để chọn cặp: Click LÊN trước → Click XUỐNG
+<!-- Step 1: Chọn Barn có relay 8 kênh -->
+<?php if (!$barn_id): ?>
+<div class="mb-4">
+    <div class="text-sm font-semibold mb-3">🔌 Chọn chuồng có relay 8 kênh để cài đặt:</div>
+    <div class="grid grid-cols-2 gap-3">
+        <?php foreach ($barns_with_relays as $b): ?>
+        <a href="/iot/curtains/setup?barn_id=<?php echo $b->id; ?>"
+           class="block p-4 rounded-xl border-2 border-green-200 dark:border-green-700 hover:border-green-500 bg-white dark:bg-gray-800">
+            <div class="font-semibold"><?php echo htmlspecialchars($b->name); ?></div>
+            <div class="text-xs text-gray-500 mt-1">
+                <?php echo htmlspecialchars($b->device_name); ?> ·
+                <?php echo $b->relay_name; ?> ·
+                <?php echo $b->used_ch; ?>/8 kênh dùng
+            </div>
+            <div class="text-xs mt-2 <?php echo ($b->curtain_count >= 4) ? 'text-green-600' : 'text-orange-500'; ?>">
+                <?php echo $b->curtain_count; ?>/4 bạt đã cài
+            </div>
+        </a>
+        <?php endforeach; ?>
     </div>
 
-    <!-- Pin Configuration -->
-    <div class="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
-        <div class="flex items-center justify-between mb-2">
-            <div class="text-xs font-semibold text-yellow-700 dark:text-yellow-300">
-                🔌 Cấu hình GPIO Pins
-            </div>
-            <button onclick="togglePinEdit()" id="pinEditBtn" class="text-xs text-blue-500">✏️ Sửa</button>
-        </div>
-        <div id="pinDisplay" class="grid grid-cols-4 gap-2 text-xs">
-            <?php foreach ($device_channels as $ch): ?>
-            <div class="text-center py-1 bg-white dark:bg-gray-800 rounded">
-                CH<?php echo $ch->channel_number; ?> → <span class="font-mono font-bold">GPIO <?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : '—'; ?></span>
-            </div>
-            <?php endforeach; ?>
-        </div>
-        <div id="pinEditor" class="hidden grid grid-cols-4 gap-2">
-            <?php foreach ($device_channels as $ch): ?>
-            <div class="text-center">
-                <div class="text-xs text-gray-400 mb-1">CH<?php echo $ch->channel_number; ?></div>
-                <input type="number" id="pin_<?php echo $ch->id; ?>" value="<?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : ''; ?>"
-                       min="0" max="39" placeholder="GPIO"
-                       class="w-full text-center border rounded py-1 text-xs font-mono">
-            </div>
-            <?php endforeach; ?>
-            <button onclick="savePins(<?php echo $device_id; ?>)"
-                    class="col-span-4 bg-blue-600 text-white text-xs py-2 rounded mt-2">
-                💾 Lưu pins
-            </button>
-        </div>
+    <?php if (empty($barns_with_relays)): ?>
+    <div class="text-center py-8 text-gray-500">
+        <div class="text-4xl mb-2">🔌</div>
+        <div>Chưa có chuồng nào có relay 8 kênh</div>
+        <a href="/settings/iot" class="text-blue-500 text-sm mt-2 inline-block">→ Thêm thiết bị relay</a>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<!-- Step 2: Cài đặt bạt cho barn đã chọn -->
+<?php if ($barn_id && $device_id): ?>
+<div class="mb-4 flex items-center gap-2">
+    <a href="/iot/curtains/setup" class="text-sm text-blue-600">← Chọn chuồng khác</a>
+</div>
+
+<div class="bg-white dark:bg-gray-800 rounded-2xl border border-green-200 dark:border-green-800 p-4 mb-4">
+    <div class="text-sm font-semibold mb-3">
+        🔌 Cài đặt GPIO cho 4 bạt - <?php echo htmlspecialchars($barn_name); ?>
+    </div>
+    <div class="text-xs text-gray-400 mb-3">
+        Click vào GPIO để chọn cặp: Click LÊN trước → Click XUỐNG
     </div>
 
     <!-- 8 Relay Boxes -->
@@ -130,21 +136,6 @@ function toggleRelay(id, ch) {
     renderSelection();
 }
 
-function togglePinEdit() {
-    var display = document.getElementById('pinDisplay');
-    var editor = document.getElementById('pinEditor');
-    var btn = document.getElementById('pinEditBtn');
-    if (editor.classList.contains('hidden')) {
-        editor.classList.remove('hidden');
-        display.classList.add('hidden');
-        btn.textContent = '✖ Đóng';
-    } else {
-        editor.classList.add('hidden');
-        display.classList.remove('hidden');
-        btn.textContent = '✏️ Sửa';
-    }
-}
-
 async function savePins(deviceId) {
     var pins = {};
     <?php foreach ($device_channels as $ch): ?>
@@ -209,17 +200,27 @@ renderSelection();
 </script>
 <?php endif; ?>
 
-<!-- Bạt hiện tại theo barn -->
-<?php foreach ($barns as $b):
-    $curtains = isset($curtains_by_barn[$b->id]) ? $curtains_by_barn[$b->id] : array();
+<!-- Hiển thị bạt hiện tại theo barn (khi đã chọn barn nhưng chưa có device) -->
+<?php if ($barn_id && !$device_id): ?>
+<div class="mb-4">
+    <a href="/iot/curtains/setup" class="text-sm text-blue-600">← Chọn chuồng khác</a>
+</div>
+
+<?php
+$curtains = isset($curtains_by_barn[$barn_id]) ? $curtains_by_barn[$barn_id] : array();
+$barn_name = '';
+foreach ($barns as $b) {
+    if ($b->id == $barn_id) {
+        $barn_name = $b->name;
+        break;
+    }
+}
 ?>
+
 <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-3">
     <div class="flex items-center justify-between mb-3">
         <div>
-            <div class="font-semibold text-sm"><?php echo htmlspecialchars($b->name); ?></div>
-            <?php if ($b->active_cycle): ?>
-            <div class="text-xs text-gray-400">Chu kỳ: <?php echo htmlspecialchars($b->active_cycle); ?></div>
-            <?php endif; ?>
+            <div class="font-semibold text-sm"><?php echo htmlspecialchars($barn_name); ?></div>
         </div>
         <span class="text-xs <?php echo (count($curtains) >= 4) ? 'text-green-500' : 'text-gray-400'; ?>">
             <?php echo count($curtains); ?>/4 bạt
@@ -227,7 +228,7 @@ renderSelection();
     </div>
 
     <?php if (empty($curtains)): ?>
-    <div class="text-center py-4 text-sm text-gray-400">Chưa có bạt nào</div>
+    <div class="text-center py-4 text-sm text-gray-400">Chưa có bạt nào - cần chọn relay device</div>
     <?php else: ?>
     <div class="space-y-2 mb-3">
         <?php foreach ($curtains as $cc): ?>
@@ -235,7 +236,7 @@ renderSelection();
             <div>
                 <span class="font-medium">🪟 <?php echo htmlspecialchars($cc->name); ?></span>
                 <span class="text-xs text-gray-400 ml-2">
-                    <?php echo $cc->relay_code; ?> · CH<?php echo $cc->up_ch; ?>↑ CH<?php echo $cc->dn_ch; ?>↓
+                    CH<?php echo $cc->up_ch; ?>↑ CH<?php echo $cc->dn_ch; ?>↓
                 </span>
                 <span class="text-xs ml-2 <?php echo ($cc->moving_state !== 'idle') ? 'text-blue-500' : 'text-gray-400'; ?>">
                     <?php echo $cc->current_position_pct; ?>%
@@ -252,110 +253,33 @@ renderSelection();
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
-
-    <?php if (count($curtains) < 4): ?>
-    <button onclick="openForm(<?php echo $b->id; ?>)"
-            class="w-full text-center text-xs font-semibold py-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600">
-        + Thêm bộ <?php echo (4 - count($curtains)); ?> bạt còn lại
-    </button>
-    <?php endif; ?>
 </div>
-<?php endforeach; ?>
 
-<!-- Form thêm bộ bạt (chỉ hiện khi KHÔNG chọn device) -->
-<?php if (!$device_id): ?>
-<div id="addForm">
+<!-- Chọn relay device cho barn này -->
+<?php
+$available_devices = array();
+foreach ($relay_devices as $d) {
+    if ($d->barn_id == $barn_id || !isset($d->barn_id)) {
+        $available_devices[] = $d;
+    }
+}
+?>
+
+<?php if (!empty($available_devices)): ?>
 <div class="bg-white dark:bg-gray-800 rounded-2xl border border-blue-200 dark:border-blue-800 p-4 mb-3">
-    <div class="text-sm font-semibold mb-3">➕ Thêm bộ 4 bạt</div>
-    <form method="POST" action="/iot/curtains/store">
-
-        <div class="mb-3">
-            <label class="text-xs font-medium text-gray-500 block mb-1">Chuồng *</label>
-            <select name="barn_id" id="barnSelect" required onchange="updateRelays()"
-                    class="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700">
-                <option value="">— Chọn chuồng —</option>
-                <?php foreach ($barns as $b): ?>
-                <option value="<?php echo $b->id; ?>" <?php echo ($barn_id == $b->id) ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($b->name); ?>
-                </option>
-                <?php endforeach; ?>
-            </select>
+    <div class="text-sm font-semibold mb-3">Chọn Relay Device:</div>
+    <?php foreach ($available_devices as $d): ?>
+    <a href="/iot/curtains/setup?barn_id=<?php echo $barn_id; ?>&device_id=<?php echo $d->id; ?>"
+       class="block p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-blue-500 mb-2">
+        <div class="font-medium"><?php echo htmlspecialchars($d->name); ?></div>
+        <div class="text-xs text-gray-400">
+            <?php echo ($d->total_ch - $d->used_ch); ?> kênh trống
         </div>
-
-        <div class="mb-3">
-            <label class="text-xs font-medium text-gray-500 block mb-1">Relay device *</label>
-            <select name="device_id" id="deviceSelect" required
-                    class="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700">
-                <option value="">— Chọn relay —</option>
-                <?php foreach ($relay_devices as $d): ?>
-                <?php $barnName = isset($d->barn_name) ? $d->barn_name : 'Chưa gán'; ?>
-                <option value="<?php echo $d->id; ?>"
-                        data-barn="<?php echo $d->barn_id; ?>"
-                        data-free="<?php echo ($d->total_ch - $d->used_ch); ?>">
-                    <?php echo htmlspecialchars($d->name); ?> · <?php echo $barnName; ?> · <?php echo ($d->total_ch - $d->used_ch); ?> kênh trống
-                </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="mb-3">
-            <label class="text-xs font-medium text-gray-500 block mb-2">Tên 4 bạt *</label>
-            <div class="grid grid-cols-2 gap-2">
-                <?php
-                $default_names = array('Trái dưới', 'Trái trên', 'Phải dưới', 'Phải trên');
-                for ($i = 0; $i < 4; $i++):
-                ?>
-                <input type="text" name="curtain_names[]"
-                       value="<?php echo $default_names[$i]; ?>" required
-                       placeholder="Bạt <?php echo ($i + 1); ?>"
-                       class="border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-gray-700">
-                <?php endfor; ?>
-            </div>
-            <div class="text-xs text-gray-400 mt-1">CH1-2→Bạt1, CH3-4→Bạt2, CH5-6→Bạt3, CH7-8→Bạt4</div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2 mb-4">
-            <div>
-                <label class="text-xs font-medium text-gray-500 block mb-1">Thời gian lên (giây)</label>
-                <input type="number" name="full_up_seconds" value="60" min="10" max="300" step="0.5"
-                       class="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-gray-700">
-            </div>
-            <div>
-                <label class="text-xs font-medium text-gray-500 block mb-1">Thời gian xuống (giây)</label>
-                <input type="number" name="full_down_seconds" value="55" min="10" max="300" step="0.5"
-                       class="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-gray-700">
-            </div>
-        </div>
-
-        <button type="submit"
-                class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl text-sm">
-            ✅ Tạo 4 bạt tự động
-        </button>
-    </form>
-</div>
+    </a>
+    <?php endforeach; ?>
 </div>
 <?php endif; ?>
 
-<button onclick="openForm(0)"
-        class="w-full text-center text-sm font-semibold py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mb-4">
-    ➕ Thêm bộ bạt mới cho chuồng khác
-</button>
-
-<script>
-function openForm(barnId) {
-    document.getElementById('addForm').classList.remove('hidden');
-    if (barnId) document.getElementById('barnSelect').value = barnId;
-    document.getElementById('addForm').scrollIntoView({behavior: 'smooth'});
-    updateRelays();
-}
-
-function updateRelays() {
-    var barnId = document.getElementById('barnSelect').value;
-    var opts = document.querySelectorAll('#deviceSelect option[data-barn]');
-    opts.forEach(function(o) {
-        o.style.display = (!barnId || o.dataset.barn == barnId || o.dataset.barn == '') ? '' : 'none';
-    });
-}
-</script>
+<?php endif; ?>
 
 <?php $content = ob_get_clean(); require view_path('layouts/main.php'); ?>
