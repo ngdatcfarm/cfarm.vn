@@ -112,15 +112,19 @@ class DeviceController
     {
         $stmt = $this->pdo->prepare("
             SELECT cc.*,
-                   uc.channel_number as up_channel, dc.channel_number as down_channel,
-                   ud.mqtt_topic as up_mqtt_topic, dd.mqtt_topic as down_mqtt_topic,
-                   uc.device_id as up_device_id, dc.device_id as down_device_id,
-                   uc.id as up_channel_id, dc.id as down_channel_id
+                   COALESCE(uc.channel_number, 1) as up_channel,
+                   COALESCE(dc.channel_number, 2) as down_channel,
+                   COALESCE(ud.mqtt_topic, '') as up_mqtt_topic,
+                   COALESCE(dd.mqtt_topic, '') as down_mqtt_topic,
+                   COALESCE(uc.device_id, 0) as up_device_id,
+                   COALESCE(dc.device_id, 0) as down_device_id,
+                   COALESCE(uc.id, 0) as up_channel_id,
+                   COALESCE(dc.id, 0) as down_channel_id
             FROM curtain_configs cc
-            JOIN device_channels uc ON uc.id = cc.up_channel_id
-            JOIN device_channels dc ON dc.id = cc.down_channel_id
-            JOIN devices ud ON ud.id = uc.device_id
-            JOIN devices dd ON dd.id = dc.device_id
+            LEFT JOIN device_channels uc ON uc.id = cc.up_channel_id
+            LEFT JOIN device_channels dc ON dc.id = cc.down_channel_id
+            LEFT JOIN devices ud ON ud.id = uc.device_id
+            LEFT JOIN devices dd ON dd.id = dc.device_id
             WHERE cc.id = :id
         ");
         $stmt->execute([':id' => $id]);
@@ -274,16 +278,21 @@ class DeviceController
         foreach ($barns as $barn) {
             $stmt = $this->pdo->prepare("
                 SELECT cc.*,
-                       uc.channel_number as up_channel, dc.channel_number as down_channel,
-                       ud.is_online as up_online, dd.is_online as down_online,
-                       ud.device_code as up_device_code, dd.device_code as down_device_code
+                       COALESCE(uc.channel_number, 1) as up_channel,
+                       COALESCE(dc.channel_number, 2) as down_channel,
+                       COALESCE(ud.is_online, 0) as up_online,
+                       COALESCE(dd.is_online, 0) as down_online,
+                       COALESCE(ud.device_code, '') as up_device_code,
+                       COALESCE(dd.device_code, '') as down_device_code,
+                       COALESCE(uc.gpio_pin, 32) as up_gpio,
+                       COALESCE(dc.gpio_pin, 33) as down_gpio
                 FROM curtain_configs cc
-                JOIN device_channels uc ON uc.id = cc.up_channel_id
-                JOIN device_channels dc ON dc.id = cc.down_channel_id
-                JOIN devices ud ON ud.id = uc.device_id
-                JOIN devices dd ON dd.id = dc.device_id
+                LEFT JOIN device_channels uc ON uc.id = cc.up_channel_id
+                LEFT JOIN device_channels dc ON dc.id = cc.down_channel_id
+                LEFT JOIN devices ud ON ud.id = uc.device_id
+                LEFT JOIN devices dd ON dd.id = dc.device_id
                 WHERE cc.barn_id = :barn_id
-                ORDER BY cc.name
+                ORDER BY cc.id
             ");
             $stmt->execute([':barn_id' => $barn->id]);
             $curtains = $stmt->fetchAll(\PDO::FETCH_OBJ);
@@ -307,16 +316,21 @@ class DeviceController
 
         $stmt = $this->pdo->prepare("
             SELECT cc.*,
-                   uc.channel_number as up_channel, dc.channel_number as down_channel,
-                   ud.is_online as up_online, dd.is_online as down_online,
-                   ud.device_code as up_device_code, dd.device_code as down_device_code
+                   COALESCE(uc.channel_number, 1) as up_channel,
+                   COALESCE(dc.channel_number, 2) as down_channel,
+                   COALESCE(ud.is_online, 0) as up_online,
+                   COALESCE(dd.is_online, 0) as down_online,
+                   COALESCE(ud.device_code, '') as up_device_code,
+                   COALESCE(dd.device_code, '') as down_device_code,
+                   COALESCE(uc.gpio_pin, 32) as up_gpio,
+                   COALESCE(dc.gpio_pin, 33) as down_gpio
             FROM curtain_configs cc
-            JOIN device_channels uc ON uc.id = cc.up_channel_id
-            JOIN device_channels dc ON dc.id = cc.down_channel_id
-            JOIN devices ud ON ud.id = uc.device_id
-            JOIN devices dd ON dd.id = dc.device_id
+            LEFT JOIN device_channels uc ON uc.id = cc.up_channel_id
+            LEFT JOIN device_channels dc ON dc.id = cc.down_channel_id
+            LEFT JOIN devices ud ON ud.id = uc.device_id
+            LEFT JOIN devices dd ON dd.id = dc.device_id
             WHERE cc.barn_id = :barn_id
-            ORDER BY cc.name
+            ORDER BY cc.id
         ");
         $stmt->execute([':barn_id' => $barn_id]);
         $curtains = $stmt->fetchAll(\PDO::FETCH_OBJ);
