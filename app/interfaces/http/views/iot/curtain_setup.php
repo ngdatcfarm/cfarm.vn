@@ -1,6 +1,7 @@
 <?php
+global $pdo;
+
 $title = 'Cấu hình Bạt';
-$barns_list = $pdo->query("SELECT * FROM barns ORDER BY number")->fetchAll(PDO::FETCH_OBJ);
 
 // Lấy relay devices
 $relay_stmt = $pdo->query("
