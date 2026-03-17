@@ -104,6 +104,13 @@ class CurtainSetupController
             $stmt->execute([':device_id' => $device_id]);
             $device_channels = $stmt->fetchAll(PDO::FETCH_OBJ);
 
+            // Add default GPIO pins to channels if not set in DB
+            $default_gpio_pins = [32, 33, 25, 26, 27, 14, 12, 13];
+            foreach ($device_channels as $ch) {
+                $idx = $ch->channel_number - 1;
+                $ch->gpio_pin = isset($default_gpio_pins[$idx]) ? $default_gpio_pins[$idx] : null;
+            }
+
             // Get barn_name
             $stmt = $this->pdo->prepare("SELECT b.name FROM barns b JOIN devices d ON d.barn_id = b.id WHERE d.id = :id");
             $stmt->execute([':id' => $device_id]);

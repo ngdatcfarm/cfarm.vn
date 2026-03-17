@@ -65,7 +65,7 @@ ob_start();
         <?php foreach ($device_channels as $ch): ?>
         <div class="bg-white dark:bg-gray-800 rounded p-2 text-center">
             <span class="font-bold">CH<?php echo $ch->channel_number; ?></span> →
-            <span class="font-mono">CH<?php echo $ch->channel_number; ?></span>
+            <span class="font-mono">GPIO <?php echo $ch->gpio_pin; ?></span>
         </div>
         <?php endforeach; ?>
     </div>
@@ -114,7 +114,7 @@ ob_start();
                         <?php foreach ($device_channels as $ch): ?>
                         <option value="<?php echo $ch->id; ?>"
                                 <?php echo ($curtain && $curtain->up_channel_id == $ch->id) ? 'selected' : ''; ?>>
-                            CH<?php echo $ch->channel_number; ?>
+                            CH<?php echo $ch->channel_number; ?> (GPIO <?php echo $ch->gpio_pin; ?>)
                         </option>
                         <?php endforeach; ?>
                     </select>
@@ -129,7 +129,7 @@ ob_start();
                         <?php foreach ($device_channels as $ch): ?>
                         <option value="<?php echo $ch->id; ?>"
                                 <?php echo ($curtain && $curtain->down_channel_id == $ch->id) ? 'selected' : ''; ?>>
-                            CH<?php echo $ch->channel_number; ?>
+                            CH<?php echo $ch->channel_number; ?> (GPIO <?php echo $ch->gpio_pin; ?>)
                         </option>
                         <?php endforeach; ?>
                     </select>
