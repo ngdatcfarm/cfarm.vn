@@ -16,50 +16,47 @@ class CurtainSetupController
         $barn_id = (int)($_GET['barn_id'] ?? 0) ?: null;
         $device_id = (int)($_GET['device_id'] ?? 0) ?: null;
 
-        // Step 1: Get barns that have relay_board devices with 8+ channels
-        // First, let's see what devices exist
+        // Step 1: Get ALL barns that have relay_board devices (any channel count)
         $all_devices = $this->pdo->query("
             SELECT d.id, d.name, d.barn_id, d.device_type,
                    COUNT(dc.id) as channel_count
             FROM devices d
             LEFT JOIN device_channels dc ON dc.device_id = d.id
-            WHERE d.device_type = 'relay_board'
+            WHERE d.device_type = 'relay_board' AND d.barn_id IS NOT NULL
             GROUP BY d.id
             ORDER BY d.name
         ")->fetchAll(PDO::FETCH_OBJ);
 
-        // Get barns with relay_board devices
+        // Get barns with relay_board devices (any channel count)
         $barns_with_relays = array();
         foreach ($all_devices as $d) {
-            if ($d->barn_id && $d->channel_count >= 8) {
-                // Check if barn already added
-                $found = false;
-                foreach ($barns_with_relays as $b) {
-                    if ($b->id == $d->barn_id) {
-                        $found = true;
-                        break;
-                    }
+            // Check if barn already added
+            $found = false;
+            foreach ($barns_with_relays as $b) {
+                if ($b->id == $d->barn_id) {
+                    $found = true;
+                    break;
                 }
-                if (!$found) {
-                    $barn_stmt = $this->pdo->prepare("SELECT name FROM barns WHERE id = :id");
-                    $barn_stmt->execute(array(':id' => $d->barn_id));
-                    $barn_name = $barn_stmt->fetchColumn();
+            }
+            if (!$found && $d->barn_id) {
+                $barn_stmt = $this->pdo->prepare("SELECT name FROM barns WHERE id = :id");
+                $barn_stmt->execute(array(':id' => $d->barn_id));
+                $barn_name = $barn_stmt->fetchColumn();
 
-                    $b = new stdClass();
-                    $b->id = $d->barn_id;
-                    $b->name = $barn_name;
-                    $b->device_id = $d->id;
-                    $b->device_name = $d->name;
-                    $b->relay_name = $d->name;
-                    $b->total_ch = $d->channel_count;
-                    $b->used_ch = 0;
-                    $b->curtain_count = 0;
-                    $barns_with_relays[] = $b;
-                }
+                $b = new stdClass();
+                $b->id = $d->barn_id;
+                $b->name = $barn_name;
+                $b->device_id = $d->id;
+                $b->device_name = $d->name;
+                $b->relay_name = $d->name;
+                $b->total_ch = $d->channel_count;
+                $b->used_ch = 0;
+                $b->curtain_count = 0;
+                $barns_with_relays[] = $b;
             }
         }
 
-        // Get all devices with 8+ channels
+        // Get all relay_board devices
         $relay_devices = $this->pdo->query("
             SELECT d.*, b.name as barn_name,
                    COUNT(dc.id) as total_ch,
@@ -69,8 +66,8 @@ class CurtainSetupController
             LEFT JOIN device_channels dc ON dc.device_id = d.id
             LEFT JOIN curtain_configs cc_up ON cc_up.up_channel_id = dc.id
             LEFT JOIN curtain_configs cc_dn ON cc_dn.down_channel_id = dc.id
+            WHERE d.device_type = 'relay_board'
             GROUP BY d.id
-            HAVING COUNT(dc.id) >= 8
             ORDER BY b.name, d.name
         ")->fetchAll(PDO::FETCH_OBJ);
 
