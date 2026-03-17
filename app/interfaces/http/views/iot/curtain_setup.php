@@ -3,31 +3,62 @@ global $pdo;
 
 $title = 'Cấu hình Bạt';
 
-// Lấy relay devices
-$relay_stmt = $pdo->query("
-    SELECT d.*, b.name as barn_name, dt.name as type_name
-    FROM devices d
-    JOIN device_types dt ON dt.id = d.device_type_id
-    WHERE dt.device_class = 'relay'
-    ORDER BY b.name, d.name
-");
-$relay_devices = [];
-while ($row = $relay_stmt->fetch(PDO::FETCH_OBJ)) {
-    $relay_devices[$row->barn_id][] = $row;
+// Get barn_id from URL
+$barn_id = (int)($_GET['barn_id'] ?? 0);
+$saved = $_GET['saved'] ?? null;
+$error = $_GET['error'] ?? null;
+
+// Get all barns
+$barns_list = [];
+try {
+    $stmt = $pdo->query("SELECT * FROM barns ORDER BY number");
+    $barns_list = $stmt->fetchAll(PDO::FETCH_OBJ);
+} catch (Exception $e) {
+    error_log("Error loading barns: " . $e->getMessage());
 }
 
-// Lấy channels cho mỗi device
+// Get selected barn info
+$selected_barn = null;
+if ($barn_id) {
+    $stmt = $pdo->prepare("SELECT * FROM barns WHERE id = ?");
+    $stmt->execute([$barn_id]);
+    $selected_barn = $stmt->fetch(PDO::FETCH_OBJ);
+}
+
+// Get relay devices for this barn
+$relay_devices = [];
+if ($barn_id) {
+    $stmt = $pdo->prepare("
+        SELECT d.* FROM devices d
+        JOIN device_types dt ON dt.id = d.device_type_id
+        WHERE d.barn_id = ? AND dt.device_class = 'relay'
+    ");
+    $stmt->execute([$barn_id]);
+    $relay_devices = $stmt->fetchAll(PDO::FETCH_OBJ);
+}
+
+// Get channels for devices
 $device_channels = [];
 if (!empty($relay_devices)) {
-    $device_ids = array_merge(...array_map(fn($arr) => array_column($arr, 'id'), $relay_devices));
-    if (!empty($device_ids)) {
-        $placeholders = implode(',', array_fill(0, count($device_ids), '?'));
-        $ch_stmt = $pdo->prepare("SELECT * FROM device_channels WHERE device_id IN ($placeholders) ORDER BY device_id, channel_number");
-        $ch_stmt->execute($device_ids);
-        while ($ch = $ch_stmt->fetch(PDO::FETCH_OBJ)) {
-            $device_channels[$ch->device_id][] = $ch;
-        }
+    foreach ($relay_devices as $dev) {
+        $stmt = $pdo->prepare("SELECT * FROM device_channels WHERE device_id = ? ORDER BY channel_number");
+        $stmt->execute([$dev->id]);
+        $device_channels[$dev->id] = $stmt->fetchAll(PDO::FETCH_OBJ);
     }
+}
+
+// Get existing curtains for this barn
+$curtains = [];
+if ($barn_id) {
+    $stmt = $pdo->prepare("
+        SELECT cc.*, 
+               (SELECT channel_number FROM device_channels WHERE id = cc.up_channel_id) as up_ch,
+               (SELECT channel_number FROM device_channels WHERE id = cc.down_channel_id) as down_ch
+        FROM curtain_configs cc
+        WHERE cc.barn_id = ?
+    ");
+    $stmt->execute([$barn_id]);
+    $curtains = $stmt->fetchAll(PDO::FETCH_OBJ);
 }
 
 ob_start();
@@ -49,6 +80,9 @@ ob_start();
 <!-- Chọn barn -->
 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
     <div class="text-sm font-semibold mb-3">Chọn chuồng để cấu hình bạt:</div>
+    <?php if (empty($barns_list)): ?>
+    <div class="text-gray-400">Chưa có chuồng nào</div>
+    <?php else: ?>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
         <?php foreach ($barns_list as $b): ?>
         <a href="/settings/iot/curtain/setup?barn_id=<?= $b->id ?>"
@@ -57,6 +91,7 @@ ob_start();
         </a>
         <?php endforeach; ?>
     </div>
+    <?php endif; ?>
 </div>
 
 <?php else: // Đã chọn barn ?>
@@ -69,10 +104,7 @@ ob_start();
 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-4">
     <div class="text-sm font-semibold mb-3">➕ Thêm bạt mới</div>
     
-    <?php 
-    $barn_relays = $relay_devices[$barn_id] ?? [];
-    if (empty($barn_relays)): 
-    ?>
+    <?php if (empty($relay_devices)): ?>
     <div class="text-red-500 p-4 bg-red-50 rounded-xl">
         Chưa có thiết bị relay nào cho chuồng này. 
         <a href="/settings/iot?tab=devices" class="underline">Thêm thiết bị relay</a> trước.
@@ -87,7 +119,7 @@ ob_start();
             <select name="device_id" id="deviceSelect" required class="w-full border rounded-lg px-3 py-2 text-sm"
                     onchange="loadChannels(this.value)">
                 <option value="">— Chọn thiết bị —</option>
-                <?php foreach ($barn_relays as $dev): ?>
+                <?php foreach ($relay_devices as $dev): ?>
                 <option value="<?= $dev->id ?>"><?= htmlspecialchars($dev->name) ?></option>
                 <?php endforeach; ?>
             </select>
@@ -164,7 +196,6 @@ ob_start();
 <?php endif; ?>
 
 <script>
-// Data for channels
 const deviceChannels = <?= json_encode($device_channels) ?>;
 
 function loadChannels(deviceId) {
