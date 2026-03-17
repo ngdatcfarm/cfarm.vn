@@ -104,11 +104,23 @@ class CurtainSetupController
             $stmt->execute([':device_id' => $device_id]);
             $device_channels = $stmt->fetchAll(PDO::FETCH_OBJ);
 
-            // Add default GPIO pins to channels if not set in DB
+            // If no channels in DB, create default 8 channels with GPIO pins
             $default_gpio_pins = [32, 33, 25, 26, 27, 14, 12, 13];
-            foreach ($device_channels as $ch) {
-                $idx = $ch->channel_number - 1;
-                $ch->gpio_pin = isset($default_gpio_pins[$idx]) ? $default_gpio_pins[$idx] : null;
+            if (empty($device_channels)) {
+                for ($i = 1; $i <= 8; $i++) {
+                    $ch = new stdClass();
+                    $ch->id = $i;
+                    $ch->device_id = $device_id;
+                    $ch->channel_number = $i;
+                    $ch->gpio_pin = $default_gpio_pins[$i - 1] ?? null;
+                    $device_channels[] = $ch;
+                }
+            } else {
+                // Add GPIO pins to existing channels
+                foreach ($device_channels as $ch) {
+                    $idx = $ch->channel_number - 1;
+                    $ch->gpio_pin = isset($default_gpio_pins[$idx]) ? $default_gpio_pins[$idx] : null;
+                }
             }
 
             // Get barn_name
