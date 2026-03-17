@@ -238,6 +238,12 @@ $r->addRoute('POST', '/iot/curtain/{id:\d+}/move',         [CurtainController::c
 $r->addRoute('POST', '/iot/curtain/{id:\d+}/stop',         [CurtainController::class, 'curtain_stop']);
 $r->addRoute('GET',  '/iot/curtain/{id:\d+}/status',       [CurtainController::class, 'curtain_status']);
 
+// Curtain Setup Controller
+use App\Interfaces\Http\Controllers\Web\IoT\CurtainSetupController;
+$r->addRoute('GET',  '/settings/iot/curtain/setup',        [CurtainSetupController::class, 'setup']);
+$r->addRoute('POST', '/settings/iot/curtain/store',         [CurtainSetupController::class, 'store']);
+$r->addRoute('POST', '/settings/iot/curtain/{id:\d+}/delete', [CurtainSetupController::class, 'delete']);
+
 // =============================================================================
 
 // ------------------------------------------------------------------
