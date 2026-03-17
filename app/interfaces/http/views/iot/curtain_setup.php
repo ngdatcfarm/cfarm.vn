@@ -65,7 +65,7 @@ ob_start();
         <?php foreach ($device_channels as $ch): ?>
         <div class="bg-white dark:bg-gray-800 rounded p-2 text-center">
             <span class="font-bold">CH<?php echo $ch->channel_number; ?></span> →
-            <span class="font-mono">GPIO <?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : '—'; ?></span>
+            <span class="font-mono">CH<?php echo $ch->channel_number; ?></span>
         </div>
         <?php endforeach; ?>
     </div>
@@ -82,8 +82,8 @@ ob_start();
         // Note: $pdo is available from controller via extract()
         $curtains_stmt = $pdo->prepare("
             SELECT cc.*,
-                   dcu.channel_number as up_ch, dcu.gpio_pin as up_gpio,
-                   dcd.channel_number as dn_ch, dcd.gpio_pin as dn_gpio
+                   dcu.channel_number as up_ch,
+                   dcd.channel_number as dn_ch
             FROM curtain_configs cc
             LEFT JOIN device_channels dcu ON dcu.id = cc.up_channel_id
             LEFT JOIN device_channels dcd ON dcd.id = cc.down_channel_id
@@ -114,7 +114,7 @@ ob_start();
                         <?php foreach ($device_channels as $ch): ?>
                         <option value="<?php echo $ch->id; ?>"
                                 <?php echo ($curtain && $curtain->up_channel_id == $ch->id) ? 'selected' : ''; ?>>
-                            CH<?php echo $ch->channel_number; ?> (GPIO <?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : '—'; ?>)
+                            CH<?php echo $ch->channel_number; ?>
                         </option>
                         <?php endforeach; ?>
                     </select>
@@ -129,7 +129,7 @@ ob_start();
                         <?php foreach ($device_channels as $ch): ?>
                         <option value="<?php echo $ch->id; ?>"
                                 <?php echo ($curtain && $curtain->down_channel_id == $ch->id) ? 'selected' : ''; ?>>
-                            CH<?php echo $ch->channel_number; ?> (GPIO <?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : '—'; ?>)
+                            CH<?php echo $ch->channel_number; ?>
                         </option>
                         <?php endforeach; ?>
                     </select>
