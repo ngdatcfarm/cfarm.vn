@@ -4,20 +4,20 @@
 -- ============================================================
 
 -- Create database (if not exists)
-CREATE DATABASE IF NOT EXISTS cfarm_app CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS cfarm_app_raw CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- Create user (if not exists)
-CREATE USER IF NOT EXISTS 'cfarm_user'@'localhost' IDENTIFIED BY 'Abc@@123';
-CREATE USER IF NOT EXISTS 'cfarm_user'@'%' IDENTIFIED BY 'Abc@@123';
+CREATE USER IF NOT EXISTS 'cfarm_user'@'localhost' IDENTIFIED BY 'cfarm_pass';
+CREATE USER IF NOT EXISTS 'cfarm_user'@'%' IDENTIFIED BY 'cfarm_pass';
 
 -- Grant privileges
-GRANT ALL PRIVILEGES ON cfarm_app.* TO 'cfarm_user'@'localhost';
-GRANT ALL PRIVILEGES ON cfarm_app.* TO 'cfarm_user'@'%';
+GRANT ALL PRIVILEGES ON cfarm_app_raw.* TO 'cfarm_user'@'localhost';
+GRANT ALL PRIVILEGES ON cfarm_app_raw.* TO 'cfarm_user'@'%';
 
 FLUSH PRIVILEGES;
 
 -- Use the database
-USE cfarm_app;
+USE cfarm_app_raw;
 
 -- ============================================================
 -- NEW IOT SCHEMA - Clean & Logical
