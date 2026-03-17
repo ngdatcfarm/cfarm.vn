@@ -11,7 +11,7 @@ class MqttService
 
     public function __construct()
     {
-        $this->host = '127.0.0.1';
+        $this->host = '103.166.183.215'; // MQTT Broker - cloud server IP
         $this->port = 1883;
         $this->user = 'cfarm_server';
         $this->pass = 'Abc@@123';
