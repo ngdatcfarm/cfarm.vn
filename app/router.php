@@ -215,80 +215,28 @@ $r->addRoute('GET',  '/weight/session/{id}/samples',       [WeightController::cl
 $r->addRoute('GET', '/reports',      [ReportController::class, 'index']);
 $r->addRoute('GET', '/reports/{id}',  [ReportController::class, 'show']);
 
-// IoT - Device Control
-use App\Interfaces\Http\Controllers\Web\IoT\DeviceController;
-$r->addRoute('GET', '/iot/sensor/{id:\d+}', [DeviceController::class, 'sensor_show']);
-$r->addRoute('GET',  '/iot/devices',                    [DeviceController::class, 'index']);
-$r->addRoute('GET', '/iot/control', [DeviceController::class, 'control_all']);
-$r->addRoute('GET',  '/iot/control/{barn_id:\d+}',     [DeviceController::class, 'control_page']);
-$r->addRoute('GET',  '/iot/barn/{barn_id:\d+}/curtains',[DeviceController::class, 'barn_curtains']);
-$r->addRoute('POST', '/iot/curtain/{id:\d+}/move',     [DeviceController::class, 'curtain_move']);
-$r->addRoute('POST', '/iot/curtain/{id:\d+}/stop',     [DeviceController::class, 'curtain_stop']);
-
-// IoT Settings
-use App\Interfaces\Http\Controllers\Web\IoT\IoTSettingsController;
-use App\Interfaces\Http\Controllers\Web\IoT\CurtainSetupController;
-$r->addRoute('GET',  '/settings/iot',                        [IoTSettingsController::class, 'index']);
-$r->addRoute('GET',  '/settings/iot/help',                   [IoTSettingsController::class, 'iot_help']);
-$r->addRoute('POST', '/settings/iot/curtain/store',          [IoTSettingsController::class, 'curtain_store']);
-$r->addRoute('POST', '/settings/iot/curtain/{id:\d+}/update',[IoTSettingsController::class, 'curtain_update']);
-$r->addRoute('POST', '/settings/iot/curtain/{id:\d+}/delete',[IoTSettingsController::class, 'curtain_delete']);
-
-// IoT Firmware
-$r->addRoute('GET', '/settings/iot/firmware/{device_id:\d+}', [IoTSettingsController::class, 'firmware_code']);
-$r->addRoute('GET', '/settings/iot/firmware/{device_id:\d+}/raw', [IoTSettingsController::class, 'firmware_raw']);
-$r->addRoute('GET', '/settings/iot/firmwares', [IoTSettingsController::class, 'firmwares_index']);
-$r->addRoute('POST', '/settings/iot/firmwares/upload', [IoTSettingsController::class, 'firmware_upload']);
-$r->addRoute('POST', '/settings/iot/firmware/{id:\d+}/delete', [IoTSettingsController::class, 'firmware_delete']);
-
-// OTA Endpoints (for ESP32)
-$r->addRoute('GET', '/api/firmware/{device_type:\d+}/latest', [IoTSettingsController::class, 'ota_check']);
-$r->addRoute('GET', '/api/firmware/{device_type:\d+}/bin', [IoTSettingsController::class, 'ota_redirect']); // Direct redirect to bin
-$r->addRoute('GET', '/api/firmware/download/{id:\d+}', [IoTSettingsController::class, 'ota_download']);
-
-// IoT Device Management
-$r->addRoute('POST', '/settings/iot/device/store',               [IoTSettingsController::class, 'device_store']);
-$r->addRoute('POST', '/settings/iot/device/{id:\d+}/update',   [IoTSettingsController::class, 'device_update']);
-$r->addRoute('POST', '/settings/iot/device/{id:\d+}/pins',     [IoTSettingsController::class, 'device_pins_save']);
-$r->addRoute('POST', '/settings/iot/device/{id:\d+}/delete',   [IoTSettingsController::class, 'device_delete']);
-
-
-// IoT Device Type Editor
-$r->addRoute('GET',  '/settings/iot/types',                    [IoTSettingsController::class, 'types_index']);
-$r->addRoute('GET',  '/settings/iot/types/{id:\d+}',          [IoTSettingsController::class, 'type_show']);
-$r->addRoute('POST', '/settings/iot/types/{id:\d+}/save',     [IoTSettingsController::class, 'type_save']);
-
-$r->addRoute('POST', '/settings/iot/device/{id:\d+}/toggle-alert', [IoTSettingsController::class, 'device_toggle_alert']);
-$r->addRoute('POST', '/settings/iot/device/{id:\d+}/allocate-firmware', [IoTSettingsController::class, 'allocate_firmware']);
-$r->addRoute('GET', '/settings/iot/device/{id:\d+}/allocations', [IoTSettingsController::class, 'device_allocations']);
-
-// IoT Device Types
-$r->addRoute('POST', '/settings/iot/type/store',                 [IoTSettingsController::class, 'type_store']);
-$r->addRoute('POST', '/settings/iot/type/{id:\d+}/update',     [IoTSettingsController::class, 'type_update']);
-$r->addRoute('POST', '/settings/iot/type/{id:\d+}/delete',     [IoTSettingsController::class, 'type_delete']);
-
-// ENV Dashboard
-$r->addRoute('GET', '/env',               [EnvController::class, 'index']);
-$r->addRoute('GET', '/env/barn/{id:\d+}', [EnvController::class, 'barn_show']);
-$r->addRoute('GET', '/env/api/barn/{id:\d+}', [EnvController::class, 'api_latest']);
-
-// ENV interval config
-$r->addRoute('POST', '/env/barn/{id:\d+}/interval', [EnvController::class, 'update_interval']);
-
-// IoT Node creation
-$r->addRoute('GET',  '/iot/nodes/create', [IoTSettingsController::class, 'node_create']);
-$r->addRoute('GET',  '/iot/nodes/{id:\d+}/edit',   [IoTSettingsController::class, 'node_edit']);
-$r->addRoute('POST', '/iot/nodes/{id:\d+}/update', [IoTSettingsController::class, 'node_update']);
-$r->addRoute('POST', '/iot/nodes/{id:\d+}/delete', [IoTSettingsController::class, 'node_delete']);
-$r->addRoute('POST', '/iot/nodes/store',  [IoTSettingsController::class, 'node_store']);
-
-// Curtain Setup Wizard
-$r->addRoute('GET',  '/iot/curtains/setup',        [CurtainSetupController::class, 'setup']);
-$r->addRoute('POST', '/iot/curtains/store',         [CurtainSetupController::class, 'store']);
-$r->addRoute('POST', '/iot/curtains/visual-save',   [CurtainSetupController::class, 'visual_save']);
-$r->addRoute('GET',  '/iot/curtains/{id:\d+}/edit', [CurtainSetupController::class, 'edit']);
-$r->addRoute('POST', '/iot/curtains/{id:\d+}/update',[CurtainSetupController::class, 'update']);
-$r->addRoute('POST', '/iot/curtains/{id:\d+}/delete',[CurtainSetupController::class, 'delete']);
+// =============================================================================
+// IoT ROUTES - TEMPORARILY DISABLED FOR REBUILD
+// Will be re-added after IoT module is rebuilt from scratch
+// =============================================================================
+// 
+// // IoT - Device Control
+// use App\Interfaces\Http\Controllers\Web\IoT\DeviceController;
+// $r->addRoute('GET', '/iot/sensor/{id:\d+}', [DeviceController::class, 'sensor_show']);
+// $r->addRoute('GET',  '/iot/devices',                    [DeviceController::class, 'index']);
+// $r->addRoute('GET', '/iot/control', [DeviceController::class, 'control_all']);
+// $r->addRoute('GET',  '/iot/control/{barn_id:\d+}',     [DeviceController::class, 'control_page']);
+// $r->addRoute('GET',  '/iot/barn/{barn_id:\d+}/curtains',[DeviceController::class, 'barn_curtains']);
+// $r->addRoute('POST', '/iot/curtain/{id:\d+}/move',     [DeviceController::class, 'curtain_move']);
+// $r->addRoute('POST', '/iot/curtain/{id:\d+}/stop',     [DeviceController::class, 'curtain_stop']);
+//
+// // IoT Settings
+// use App\Interfaces\Http\Controllers\Web\IoT\IoTSettingsController;
+// use App\Interfaces\Http\Controllers\Web\IoT\CurtainSetupController;
+// $r->addRoute('GET',  '/settings/iot',                        [IoTSettingsController::class, 'index']);
+// ... (all IoT routes commented out for rebuild)
+//
+// =============================================================================
 
 // ------------------------------------------------------------------
 // INVENTORY
