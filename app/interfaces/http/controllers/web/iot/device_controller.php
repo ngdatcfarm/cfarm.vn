@@ -284,8 +284,6 @@ class DeviceController
                        COALESCE(dd.is_online, 0) as down_online,
                        COALESCE(ud.device_code, '') as up_device_code,
                        COALESCE(dd.device_code, '') as down_device_code,
-                       COALESCE(uc.gpio_pin, 32) as up_gpio,
-                       COALESCE(dc.gpio_pin, 33) as down_gpio
                 FROM curtain_configs cc
                 LEFT JOIN device_channels uc ON uc.id = cc.up_channel_id
                 LEFT JOIN device_channels dc ON dc.id = cc.down_channel_id
@@ -321,9 +319,7 @@ class DeviceController
                    COALESCE(ud.is_online, 0) as up_online,
                    COALESCE(dd.is_online, 0) as down_online,
                    COALESCE(ud.device_code, '') as up_device_code,
-                   COALESCE(dd.device_code, '') as down_device_code,
-                   COALESCE(uc.gpio_pin, 32) as up_gpio,
-                   COALESCE(dc.gpio_pin, 33) as down_gpio
+                   COALESCE(dd.device_code, '') as down_device_code
             FROM curtain_configs cc
             LEFT JOIN device_channels uc ON uc.id = cc.up_channel_id
             LEFT JOIN device_channels dc ON dc.id = cc.down_channel_id
