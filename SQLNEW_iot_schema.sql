@@ -1,12 +1,32 @@
 -- ============================================================
+-- CREATE DATABASE AND USER (if not exists)
+-- Run this SQL first on MySQL server
+-- ============================================================
+
+-- Create database (if not exists)
+CREATE DATABASE IF NOT EXISTS cfarm_app CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Create user (if not exists)
+CREATE USER IF NOT EXISTS 'cfarm_user'@'localhost' IDENTIFIED BY 'Abc@@123';
+CREATE USER IF NOT EXISTS 'cfarm_user'@'%' IDENTIFIED BY 'Abc@@123';
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON cfarm_app.* TO 'cfarm_user'@'localhost';
+GRANT ALL PRIVILEGES ON cfarm_app.* TO 'cfarm_user'@'%';
+
+FLUSH PRIVILEGES;
+
+-- Use the database
+USE cfarm_app;
+
+-- ============================================================
 -- NEW IOT SCHEMA - Clean & Logical
--- Run this SQL on cloud database
 -- ============================================================
 
 -- ============================================================
 -- 1. DEVICE TYPES - Loại thiết bị
 -- ============================================================
-CREATE TABLE device_types (
+CREATE TABLE IF NOT EXISTS device_types (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL COMMENT 'Tên loại: ESP32 Relay 8CH, DHT22 Sensor...',
     description VARCHAR(255) COMMENT 'Mô tả',
@@ -30,7 +50,7 @@ INSERT INTO device_types (id, name, description, device_class, total_channels, m
 -- ============================================================
 -- 2. DEVICES - Thiết bị
 -- ============================================================
-CREATE TABLE devices (
+CREATE TABLE IF NOT EXISTS devices (
     id INT AUTO_INCREMENT PRIMARY KEY,
     device_code VARCHAR(50) NOT NULL UNIQUE COMMENT 'Mã thiết bị: esp-barn1-relay-001',
     name VARCHAR(100) NOT NULL COMMENT 'Tên hiển thị',
@@ -59,7 +79,7 @@ CREATE TABLE devices (
 -- ============================================================
 -- 3. DEVICE CHANNELS - Kênh thiết bị
 -- ============================================================
-CREATE TABLE device_channels (
+CREATE TABLE IF NOT EXISTS device_channels (
     id INT AUTO_INCREMENT PRIMARY KEY,
     device_id INT NOT NULL COMMENT 'Thiết bị cha',
     channel_number TINYINT NOT NULL COMMENT 'Số kênh 1-8',
@@ -78,7 +98,7 @@ CREATE TABLE device_channels (
 -- ============================================================
 -- 4. DEVICE COMMANDS - Lệnh điều khiển
 -- ============================================================
-CREATE TABLE device_commands (
+CREATE TABLE IF NOT EXISTS device_commands (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     device_id INT NOT NULL COMMENT 'Thiết bị nhận lệnh',
     channel_id INT NULL COMMENT 'Kênh (nếu có)',
@@ -105,7 +125,7 @@ CREATE TABLE device_commands (
 -- ============================================================
 -- 5. DEVICE STATES - Trạng thái hiện tại
 -- ============================================================
-CREATE TABLE device_states (
+CREATE TABLE IF NOT EXISTS device_states (
     id INT AUTO_INCREMENT PRIMARY KEY,
     device_id INT NOT NULL,
     channel_id INT NULL,
@@ -121,7 +141,7 @@ CREATE TABLE device_states (
 -- ============================================================
 -- 6. CURTAIN CONFIGS - Cấu hình bạt
 -- ============================================================
-CREATE TABLE curtain_configs (
+CREATE TABLE IF NOT EXISTS curtain_configs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL COMMENT 'Tên bạt: Bạt 1, Bạt 2...',
     barn_id BIGINT UNSIGNED NOT NULL COMMENT 'Chuồng',
@@ -148,7 +168,7 @@ CREATE TABLE curtain_configs (
 -- ============================================================
 -- 7. DEVICE STATE LOG - Log trạng thái
 -- ============================================================
-CREATE TABLE device_state_log (
+CREATE TABLE IF NOT EXISTS device_state_log (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     device_id INT NOT NULL,
     channel_id INT NULL,
