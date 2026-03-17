@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace App\Interfaces\Http\Controllers\Web\IoT;
 use PDO;
+use stdClass;
 
 class CurtainSetupController
 {
@@ -15,46 +16,46 @@ class CurtainSetupController
         $barn_id = (int)($_GET['barn_id'] ?? 0) ?: null;
         $device_id = (int)($_GET['device_id'] ?? 0) ?: null;
 
-        // Step 1: Get barns that have devices with 8+ channels (for relay)
-        $stmt = $this->pdo->query("
-            SELECT b.id, b.name
-            FROM barns b
-            WHERE EXISTS (
-                SELECT 1 FROM devices d
-                JOIN device_channels dc ON dc.device_id = d.id
-                WHERE d.barn_id = b.id
-                GROUP BY d.id
-                HAVING COUNT(dc.id) >= 8
-            )
-            ORDER BY b.name
-        ");
-        $barns_with_relays = $stmt->fetchAll(PDO::FETCH_OBJ);
+        // Step 1: Get barns that have relay_board devices with 8+ channels
+        // First, let's see what devices exist
+        $all_devices = $this->pdo->query("
+            SELECT d.id, d.name, d.barn_id, d.device_type,
+                   COUNT(dc.id) as channel_count
+            FROM devices d
+            LEFT JOIN device_channels dc ON dc.device_id = d.id
+            WHERE d.device_type = 'relay_board'
+            GROUP BY d.id
+            ORDER BY d.name
+        ")->fetchAll(PDO::FETCH_OBJ);
 
-        // Get device info for each barn
-        foreach ($barns_with_relays as $b) {
-            $dev_stmt = $this->pdo->prepare("
-                SELECT d.id, d.name as device_name,
-                       COUNT(dc.id) as total_ch,
-                       (SELECT COUNT(*) FROM curtain_configs cc WHERE cc.barn_id = :barn_id) as curtain_count,
-                       (SELECT COUNT(*) FROM device_channels dc2
-                        JOIN curtain_configs cc ON cc.up_channel_id = dc2.id OR cc.down_channel_id = dc2.id
-                        WHERE dc2.device_id = d.id) as used_ch
-                FROM devices d
-                LEFT JOIN device_channels dc ON dc.device_id = d.id
-                WHERE d.barn_id = :barn_id
-                GROUP BY d.id
-                HAVING COUNT(dc.id) >= 8
-                LIMIT 1
-            ");
-            $dev_stmt->execute(array(':barn_id' => $b->id));
-            $dev = $dev_stmt->fetch(PDO::FETCH_OBJ);
-            if ($dev) {
-                $b->device_id = $dev->id;
-                $b->device_name = $dev->device_name;
-                $b->relay_name = $dev->device_name;
-                $b->total_ch = $dev->total_ch;
-                $b->used_ch = $dev->used_ch;
-                $b->curtain_count = $dev->curtain_count;
+        // Get barns with relay_board devices
+        $barns_with_relays = array();
+        foreach ($all_devices as $d) {
+            if ($d->barn_id && $d->channel_count >= 8) {
+                // Check if barn already added
+                $found = false;
+                foreach ($barns_with_relays as $b) {
+                    if ($b->id == $d->barn_id) {
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) {
+                    $barn_stmt = $this->pdo->prepare("SELECT name FROM barns WHERE id = :id");
+                    $barn_stmt->execute(array(':id' => $d->barn_id));
+                    $barn_name = $barn_stmt->fetchColumn();
+
+                    $b = new stdClass();
+                    $b->id = $d->barn_id;
+                    $b->name = $barn_name;
+                    $b->device_id = $d->id;
+                    $b->device_name = $d->name;
+                    $b->relay_name = $d->name;
+                    $b->total_ch = $d->channel_count;
+                    $b->used_ch = 0;
+                    $b->curtain_count = 0;
+                    $barns_with_relays[] = $b;
+                }
             }
         }
 
