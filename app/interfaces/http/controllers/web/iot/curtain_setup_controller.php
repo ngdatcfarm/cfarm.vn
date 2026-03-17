@@ -71,14 +71,29 @@ class CurtainSetupController
             ORDER BY b.name, d.name
         ")->fetchAll(PDO::FETCH_OBJ);
 
-        // Get device channels with pins if device selected
+        // Get device channels with pins
         $device_channels = array();
         $selected_up = array();
         $selected_down = array();
         $barn_name = '';
 
+        // If barn_id is selected, get the relay device and its channels
+        if ($barn_id && !$device_id) {
+            // Find relay_board device for this barn
+            $dev_stmt = $this->pdo->prepare("
+                SELECT id, name FROM devices
+                WHERE barn_id = :barn_id AND device_type = 'relay_board'
+                LIMIT 1
+            ");
+            $dev_stmt->execute(array(':barn_id' => $barn_id));
+            $relay_device = $dev_stmt->fetch(PDO::FETCH_OBJ);
+            if ($relay_device) {
+                $device_id = $relay_device->id;
+            }
+        }
+
         if ($device_id) {
-            // Get channels for this device (any device with 8+ channels)
+            // Get channels for this device
             $stmt = $this->pdo->prepare("
                 SELECT dc.*, d.device_code, d.name as device_name
                 FROM device_channels dc
@@ -97,7 +112,8 @@ class CurtainSetupController
             // Get existing curtain assignments
             if ($barn_id) {
                 $curtain_stmt = $this->pdo->prepare("
-                    SELECT cc.up_channel_id, cc.down_channel_id
+                    SELECT cc.up_channel_id, cc.down_channel_id,
+                           cc.full_up_seconds, cc.full_down_seconds
                     FROM curtain_configs cc
                     WHERE cc.barn_id = :barn_id
                 ");
@@ -139,6 +155,7 @@ class CurtainSetupController
         }
 
         // Pass variables to view
+        $pdo = $this->pdo;
         extract(get_defined_vars());
         require view_path('iot/curtain_setup.php');
     }
@@ -148,9 +165,13 @@ class CurtainSetupController
     {
         $barn_id = (int)($_POST['barn_id'] ?? 0);
         $device_id = (int)($_POST['device_id'] ?? 0);
-        $pairs = $_POST['pairs'] ?? array();
+        $curtain_names = $_POST['curtain_names'] ?? array();
+        $up_channel_ids = $_POST['up_channel_id'] ?? array();
+        $down_channel_ids = $_POST['down_channel_id'] ?? array();
+        $up_seconds = $_POST['up_seconds'] ?? array();
+        $down_seconds = $_POST['down_seconds'] ?? array();
 
-        if (!$barn_id || !$device_id || empty($pairs)) {
+        if (!$barn_id || !$device_id || empty($curtain_names)) {
             header('Location: /iot/curtains/setup?error=missing_fields');
             exit;
         }
@@ -161,19 +182,25 @@ class CurtainSetupController
             WHERE cc.barn_id = :barn_id
         ")->execute([':barn_id' => $barn_id]);
 
-        // Thêm các cặp mới
-        foreach ($pairs as $i => $pair) {
-            $up_id = (int)($pair['up'] ?? 0);
-            $dn_id = (int)($pair['down'] ?? 0);
+        // Thêm mới 4 bạt
+        for ($i = 0; $i < 4; $i++) {
+            $name = isset($curtain_names[$i]) ? trim($curtain_names[$i]) : ('Bạt ' . ($i + 1));
+            $up_id = isset($up_channel_ids[$i]) ? (int)$up_channel_ids[$i] : 0;
+            $dn_id = isset($down_channel_ids[$i]) ? (int)$down_channel_ids[$i] : 0;
+            $up_sec = isset($up_seconds[$i]) ? (float)$up_seconds[$i] : 30;
+            $dn_sec = isset($down_seconds[$i]) ? (float)$down_seconds[$i] : 30;
+
             if ($up_id && $dn_id) {
                 $this->pdo->prepare("
-                    INSERT INTO curtain_configs (name, barn_id, up_channel_id, down_channel_id, full_up_seconds, full_down_seconds)
-                    VALUES (:name, :barn_id, :up, :down, 30, 30)
+                    INSERT INTO curtain_configs (name, barn_id, up_channel_id, down_channel_id, full_up_seconds, full_down_seconds, current_position_pct, moving_state, created_at)
+                    VALUES (:name, :barn_id, :up, :down, :up_s, :down_s, 0, 'idle', NOW())
                 ")->execute([
-                    ':name' => 'Bạt ' . ($i + 1),
+                    ':name' => $name,
                     ':barn_id' => $barn_id,
                     ':up' => $up_id,
-                    ':down' => $dn_id
+                    ':down' => $dn_id,
+                    ':up_s' => $up_sec,
+                    ':down_s' => $dn_sec
                 ]);
             }
         }

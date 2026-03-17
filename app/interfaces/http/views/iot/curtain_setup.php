@@ -52,72 +52,116 @@ ob_start();
 </div>
 <?php endif; ?>
 
-<!-- Step 2: Cài đặt bạt cho barn đã chọn -->
+<!-- Step 2: Hiển thị 4 bạt để cấu hình GPIO -->
 <?php if ($barn_id && $device_id): ?>
 <div class="mb-4 flex items-center gap-2">
     <a href="/iot/curtains/setup" class="text-sm text-blue-600">← Chọn chuồng khác</a>
 </div>
 
-<div class="bg-white dark:bg-gray-800 rounded-2xl border border-green-200 dark:border-green-800 p-4 mb-4">
-    <div class="text-sm font-semibold mb-3">
-        🔌 Cài đặt GPIO cho 4 bạt - <?php echo htmlspecialchars($barn_name); ?>
-    </div>
-    <div class="text-xs text-gray-400 mb-3">
-        Click vào GPIO để chọn cặp: Click LÊN trước → Click XUỐNG
-    </div>
-
-    <!-- 8 Relay Boxes -->
-    <div class="grid grid-cols-4 gap-2 mb-4">
-        <?php foreach ($device_channels as $ch):
-            $is_up = in_array($ch->id, (isset($selected_up) ? $selected_up : array()));
-            $is_down = in_array($ch->id, (isset($selected_down) ? $selected_down : array()));
-            $box_class = 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600';
-            if ($is_up) {
-                $box_class .= ' border-green-500 bg-green-50 dark:bg-green-900/20';
-            } elseif ($is_down) {
-                $box_class .= ' border-red-500 bg-red-50 dark:bg-red-900/20';
-            }
-        ?>
-        <div class="relay-box text-center p-3 rounded-xl border-2 cursor-pointer transition-all <?php echo $box_class; ?>"
-             onclick="toggleRelay(<?php echo $ch->id; ?>, '<?php echo $ch->channel_number; ?>')">
-            <div class="text-lg font-bold">CH<?php echo $ch->channel_number; ?></div>
-            <div class="text-xs text-gray-400">GPIO <?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : '—'; ?></div>
-            <div class="text-xs mt-1 status-indicator">
-                <?php if ($is_up): ?>
-                <span class="text-green-600 font-bold">↑ LÊN</span>
-                <?php elseif ($is_down): ?>
-                <span class="text-red-600 font-bold">↓ XUỐNG</span>
-                <?php else: ?>
-                <span class="text-gray-400">—</span>
-                <?php endif; ?>
-            </div>
+<!-- Hiển thị 8 GPIO Channels để reference -->
+<div class="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 mb-4">
+    <div class="text-xs font-semibold text-yellow-700 dark:text-yellow-300 mb-2">📌 8 GPIO Channels của Relay:</div>
+    <div class="grid grid-cols-4 gap-2 text-xs">
+        <?php foreach ($device_channels as $ch): ?>
+        <div class="bg-white dark:bg-gray-800 rounded p-2 text-center">
+            <span class="font-bold">CH<?php echo $ch->channel_number; ?></span> →
+            <span class="font-mono">GPIO <?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : '—'; ?></span>
         </div>
         <?php endforeach; ?>
     </div>
-
-    <!-- Selected Pairs Display -->
-    <div class="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
-        <div class="text-xs font-semibold text-yellow-700 dark:text-yellow-300 mb-2">Các cặp đã chọn:</div>
-        <div id="selectedPairs" class="space-y-1 text-xs">
-            <!-- Dynamic content -->
-        </div>
-    </div>
-
-    <form method="POST" action="/iot/curtains/visual-save">
-        <input type="hidden" name="barn_id" value="<?php echo $barn_id; ?>">
-        <input type="hidden" name="device_id" value="<?php echo $device_id; ?>">
-        <input type="hidden" name="pairs" id="pairsJson">
-        <button type="submit" id="saveBtn" disabled
-                class="w-full py-2 text-sm font-semibold bg-green-600 text-white rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed">
-            💾 Lưu cấu hình 4 bạt
-        </button>
-    </form>
 </div>
 
-<script>
-var selectedUp = [];
-var selectedDown = [];
-var channelData = {};
+<!-- Form cấu hình 4 bạt -->
+<form method="POST" action="/iot/curtains/visual-save">
+    <input type="hidden" name="barn_id" value="<?php echo $barn_id; ?>">
+    <input type="hidden" name="device_id" value="<?php echo $device_id; ?>">
+
+    <div class="space-y-3 mb-4">
+        <?php
+        // Get existing curtains for this barn
+        // Note: $pdo is available from controller via extract()
+        $curtains_stmt = $pdo->prepare("
+            SELECT cc.*,
+                   dcu.channel_number as up_ch, dcu.gpio_pin as up_gpio,
+                   dcd.channel_number as dn_ch, dcd.gpio_pin as dn_gpio
+            FROM curtain_configs cc
+            LEFT JOIN device_channels dcu ON dcu.id = cc.up_channel_id
+            LEFT JOIN device_channels dcd ON dcd.id = cc.down_channel_id
+            WHERE cc.barn_id = :barn_id
+            ORDER BY cc.id
+        ");
+        $curtains_stmt->execute(array(':barn_id' => $barn_id));
+        $curtains = $curtains_stmt->fetchAll(PDO::FETCH_OBJ);
+
+        // Ensure we have 4 curtains (create placeholders if less)
+        for ($i = 0; $i < 4; $i++):
+            $curtain = isset($curtains[$i]) ? $curtains[$i] : null;
+        ?>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="text-sm font-semibold mb-3">🪟 Bạt <?php echo $i + 1; ?></div>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Tên bạt</label>
+                    <input type="text" name="curtain_names[]"
+                           value="<?php echo $curtain ? htmlspecialchars($curtain->name) : 'Bạt ' . ($i + 1); ?>"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Channel UP (LÊN)</label>
+                    <select name="up_channel_id[]" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option value="">— Chọn Channel —</option>
+                        <?php foreach ($device_channels as $ch): ?>
+                        <option value="<?php echo $ch->id; ?>"
+                                <?php echo ($curtain && $curtain->up_channel_id == $ch->id) ? 'selected' : ''; ?>>
+                            CH<?php echo $ch->channel_number; ?> (GPIO <?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : '—'; ?>)
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Channel DOWN (XUỐNG)</label>
+                    <select name="down_channel_id[]" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option value="">— Chọn Channel —</option>
+                        <?php foreach ($device_channels as $ch): ?>
+                        <option value="<?php echo $ch->id; ?>"
+                                <?php echo ($curtain && $curtain->down_channel_id == $ch->id) ? 'selected' : ''; ?>>
+                            CH<?php echo $ch->channel_number; ?> (GPIO <?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : '—'; ?>)
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Thời gian (giây)</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <input type="number" name="up_seconds[]"
+                                   value="<?php echo $curtain ? $curtain->full_up_seconds : 30; ?>"
+                                   min="5" max="300" class="w-full border rounded-lg px-2 py-2 text-sm" placeholder="Lên">
+                            <div class="text-xs text-gray-400 text-center">Lên</div>
+                        </div>
+                        <div>
+                            <input type="number" name="down_seconds[]"
+                                   value="<?php echo $curtain ? $curtain->full_down_seconds : 30; ?>"
+                                   min="5" max="300" class="w-full border rounded-lg px-2 py-2 text-sm" placeholder="Xuống">
+                            <div class="text-xs text-gray-400 text-center">Xuống</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endfor; ?>
+    </div>
+
+    <button type="submit"
+            class="w-full py-3 bg-green-600 text-white font-semibold rounded-xl">
+        💾 Lưu cấu hình 4 bạt
+    </button>
+</form>
+<?php endif; ?>
 
 <?php foreach ($device_channels as $ch): ?>
 channelData[<?php echo $ch->id; ?>] = {ch: <?php echo $ch->channel_number; ?>, gpio: <?php echo isset($ch->gpio_pin) ? $ch->gpio_pin : 0; ?>};
