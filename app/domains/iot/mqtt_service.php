@@ -2,9 +2,6 @@
 declare(strict_types=1);
 namespace App\Domains\IoT;
 
-use PhpMqtt\Client\MqttClient;
-use PhpMqtt\Client\ConnectionSettings;
-
 class MqttService
 {
     private string $host;
@@ -21,26 +18,23 @@ class MqttService
     }
 
     /**
-     * Publish a message to MQTT topic
+     * Publish a message to MQTT topic using mosquitto_pub
      */
     public function publish(string $topic, array $payload): bool
     {
-        try {
-            $client = new MqttClient($this->host, $this->port, 'cfarm_php_' . uniqid());
-            $settings = (new ConnectionSettings)
-                ->setUsername($this->user)
-                ->setPassword($this->pass)
-                ->setConnectTimeout(3)
-                ->setSocketTimeout(3);
+        $message = json_encode($payload);
+        $cmd = sprintf(
+            'mosquitto_pub -h %s -p %d -u %s -P %s -t "%s" -m "%s" -q 1',
+            escapeshellcmd($this->host),
+            $this->port,
+            escapeshellcmd($this->user),
+            escapeshellcmd($this->pass),
+            escapeshellcmd($topic),
+            escapeshellcmd($message)
+        );
 
-            $client->connect($settings);
-            $client->publish($topic, json_encode($payload), 1); // QoS 1
-            $client->disconnect();
-            return true;
-        } catch (\Throwable $e) {
-            error_log('MQTT publish error: ' . $e->getMessage());
-            return false;
-        }
+        exec($cmd, $output, $return);
+        return $return === 0;
     }
 
     /**
