@@ -173,6 +173,7 @@ ob_start();
                     </td>
                     <td class="px-2 py-3">
                         <button onclick="viewFirmware(<?= $d->id ?>, '<?= htmlspecialchars($d->mqtt_topic, ENT_QUOTES) ?>')" class="text-blue-500 hover:text-blue-700 text-xs" title="Xem firmware">📦</button>
+                        <button onclick="flashFirmware(<?= $d->id ?>, '<?= htmlspecialchars($d->mqtt_topic, ENT_QUOTES) ?>')" class="text-green-500 hover:text-green-700 text-xs" title="Cấp phát firmware">🔄</button>
                         <button onclick="deleteDevice(<?= $d->id ?>)" class="text-red-500 hover:text-red-700 text-xs">🗑️</button>
                     </td>
                 </tr>
@@ -331,6 +332,55 @@ function deleteDevice(id) {
         fetch('/settings/iot/device/' + id + '/delete', { method: 'POST' })
             .then(() => window.location.reload());
     }
+}
+
+function flashFirmware(deviceId, mqttTopic) {
+    if (!confirm('Gửi lệnh cập nhật firmware cho thiết bị này?\n\nESP32 sẽ tải firmware mới qua OTA.\n\nĐảm bảo ESP32 đang online!')) {
+        return;
+    }
+    
+    // Get device info first
+    fetch('/settings/iot/device/' + deviceId + '/json')
+        .then(r => r.json())
+        .then(data => {
+            const fw = firmwareData[data.device_type_id];
+            if (!fw) {
+                alert('Chưa có firmware cho loại thiết bị này!');
+                return;
+            }
+            
+            // Send OTA command via MQTT
+            const otaUrl = '/api/firmware/download/' + fw.id;
+            
+            // Replace placeholders in firmware
+            let code = fw.code
+                .replace(/YOUR_DEVICE_CODE/g, data.device_code || 'esp-device')
+                .replace(/YOUR_MQTT_TOPIC/g, mqttTopic || 'cfarm/device');
+            
+            // Send command to device
+            fetch('/settings/iot/device/' + deviceId + '/ota', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    firmware_url: window.location.origin + otaUrl,
+                    version: fw.version
+                })
+            })
+            .then(r => r.json())
+            .then(result => {
+                if (result.ok) {
+                    alert('✅ Đã gửi lệnh OTA!\n\nESP32 sẽ tự động tải và cập nhật firmware.\n\nVersion: ' + fw.version);
+                } else {
+                    alert('❌ Lỗi: ' + result.message);
+                }
+            })
+            .catch(e => {
+                alert('❌ Lỗi kết nối: ' + e.message);
+            });
+        })
+        .catch(e => {
+            alert('Không lấy được thông tin thiết bị');
+        });
 }
 </script>
 

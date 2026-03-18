@@ -418,4 +418,61 @@ class DeviceController
 
         $this->json(['ok' => true] + $device);
     }
+
+    /**
+     * POST /settings/iot/device/{id}/ota - Send OTA command to device
+     */
+    public function device_ota(array $vars): void
+    {
+        $id = (int)$vars['id'];
+        
+        // Get device info
+        $stmt = $this->pdo->prepare("SELECT * FROM devices WHERE id = ?");
+        $stmt->execute([$id]);
+        $device = $stmt->fetch(PDO::FETCH_OBJ);
+
+        if (!$device) {
+            $this->json(['ok' => false, 'message' => 'Thiết bị không tồn tại'], 404);
+        }
+
+        // Get latest firmware
+        $stmt = $this->pdo->prepare("
+            SELECT f.* FROM device_firmwares f
+            WHERE f.device_type_id = ? AND f.is_active = 1 AND f.is_latest = 1
+            LIMIT 1
+        ");
+        $stmt->execute([$device->device_type_id]);
+        $firmware = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$firmware) {
+            $this->json(['ok' => false, 'message' => 'Chưa có firmware cho thiết bị này'], 404);
+        }
+
+        // Send OTA command via MQTT
+        // The ESP32 needs to have OTA capability built-in
+        // For now, we just send a notification and provide the download URL
+        $otaUrl = '/api/firmware/download/' . $firmware['id'];
+        
+        $payload = [
+            'action' => 'ota',
+            'url' => $otaUrl,
+            'version' => $firmware['version'],
+            'ts' => time(),
+        ];
+
+        $sent = $this->mqtt->publish($device->mqtt_topic . '/cmd', $payload);
+
+        // Log the command
+        $this->pdo->prepare("
+            INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
+            VALUES (?, 'ota', ?, 'manual', 'sent', NOW())
+        ")->execute([$id, json_encode($payload)]);
+
+        $this->json([
+            'ok' => $sent, 
+            'message' => $sent ? 'Đã gửi lệnh OTA' : 'Gửi thất bại',
+            'firmware_url' => $otaUrl,
+            'version' => $firmware['version']
+        ]);
+    }
 }
