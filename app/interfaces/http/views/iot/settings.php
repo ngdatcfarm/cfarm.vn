@@ -73,49 +73,60 @@ ob_start();
         <div class="text-sm font-semibold mb-3">➕ Thêm thiết bị ESP</div>
         
         <form method="POST" action="/settings/iot/device/store" class="space-y-3">
+            
+            <!-- Chọn chuồng và loại trước -->
             <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <label class="block text-xs font-medium mb-1">Mã thiết bị</label>
-                    <input type="text" name="device_code" placeholder="esp-barn1-relay-001" required
-                           class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm">
+                    <label class="block text-xs font-medium mb-1">Chuồng <span class="text-red-500">*</span></label>
+                    <select name="barn_id" id="barnSelect" required
+                            class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm"
+                            onchange="autoGenerate()">
+                        <option value="">— Chọn —</option>
+                        <?php foreach ($barns as $b): ?>
+                        <option value="<?= $b->id ?>" data-name="<?= htmlspecialchars($b->name) ?>" data-number="<?= $b->number ?>">
+                            <?= htmlspecialchars($b->name) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-medium mb-1">Tên hiển thị</label>
-                    <input type="text" name="name" placeholder="Relay chuồng 1" required
-                           class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm">
+                    <label class="block text-xs font-medium mb-1">Loại thiết bị <span class="text-red-500">*</span></label>
+                    <select name="device_type_id" id="deviceTypeSelect" required
+                            class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm"
+                            onchange="autoGenerate()">
+                        <option value="">— Chọn —</option>
+                        <?php foreach ($device_types as $t): ?>
+                        <option value="<?= $t->id ?>" data-class="<?= $t->device_class ?>" data-channels="<?= $t->total_channels ?>">
+                            <?= htmlspecialchars($t->name) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-xs font-medium mb-1">Chuồng</label>
-                    <select name="barn_id" class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm">
-                        <option value="">— Chọn —</option>
-                        <?php foreach ($barns as $b): ?>
-                        <option value="<?= $b->id ?>"><?= htmlspecialchars($b->name) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-medium mb-1">Loại thiết bị</label>
-                    <select name="device_type_id" class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm">
-                        <?php foreach ($device_types as $t): ?>
-                        <option value="<?= $t->id ?>"><?= htmlspecialchars($t->name) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+            <div>
+                <label class="block text-xs font-medium mb-1">Mã thiết bị (device_code)</label>
+                <input type="text" name="device_code" id="deviceCode" placeholder="auto-generated" required
+                       class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm font-mono">
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium mb-1">Tên hiển thị</label>
+                <input type="text" name="name" id="deviceName" placeholder="auto-generated" required
+                       class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm">
             </div>
 
             <div>
                 <label class="block text-xs font-medium mb-1">MQTT Topic</label>
-                <input type="text" name="mqtt_topic" placeholder="cfarm/barn1" required
-                       class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm">
+                <input type="text" name="mqtt_topic" id="mqttTopic" placeholder="auto-generated" required
+                       class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm font-mono">
             </div>
 
             <div>
                 <label class="block text-xs font-medium mb-1">Ghi chú</label>
-                <input type="text" name="notes" placeholder="Ghi chú thêm..."
-                       class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm">
+                <input type="text" name="notes" id="notes" placeholder="Ghi chú thêm..."
+                       class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl px-3 py-2.5 text-sm"
+                       oninput="autoGenerate()">
             </div>
 
             <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 rounded-xl text-sm">
@@ -222,8 +233,63 @@ ob_start();
 </div>
 
 <script>
+// Get existing device count for barn
+const deviceCountByBarn = <?php 
+$countStmt = $pdo->query("SELECT barn_id, COUNT(*) as cnt FROM devices WHERE barn_id IS NOT NULL GROUP BY barn_id");
+$counts = [];
+while ($row = $countStmt->fetch(PDO::FETCH_ASSOC)) {
+    $counts[$row['barn_id']] = (int)$row['cnt'];
+}
+echo json_encode($counts);
+?>;
+
+function autoGenerate() {
+    const barnSelect = document.getElementById('barnSelect');
+    const typeSelect = document.getElementById('deviceTypeSelect');
+    const notesInput = document.getElementById('notes');
+    
+    const barnOption = barnSelect.options[barnSelect.selectedIndex];
+    const typeOption = typeSelect.options[typeSelect.selectedIndex];
+    
+    const barnId = barnSelect.value;
+    const barnName = barnOption.dataset.name || '';
+    const barnNumber = barnOption.dataset.number || '';
+    const typeClass = typeOption.dataset.class || 'relay';
+    const channels = parseInt(typeOption.dataset.channels) || 8;
+    const notes = notesInput.value || '';
+    
+    if (!barnId) return;
+    
+    // Get device count for this barn
+    const count = (deviceCountByBarn[barnId] || 0) + 1;
+    
+    // Generate slug from barn name
+    const barnSlug = barnName.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+    
+    // Generate device_code: esp-barn1-relay-001
+    let deviceCode = `esp-${barnSlug}-${typeClass}-${String(count).padStart(3, '0')}`;
+    document.getElementById('deviceCode').value = deviceCode;
+    
+    // Generate name: Relay Chuồng 1
+    let displayName = '';
+    if (typeClass === 'relay') {
+        displayName = `Relay ${barnName}`;
+    } else if (typeClass === 'sensor') {
+        displayName = `Sensor ${barnName}`;
+    } else {
+        displayName = `${typeClass.charAt(0).toUpperCase() + typeClass.slice(1)} ${barnName}`;
+    }
+    document.getElementById('deviceName').value = displayName;
+    
+    // Generate MQTT topic: cfarm/barn1
+    let mqttTopic = `cfarm/barn${barnNumber}`;
+    document.getElementById('mqttTopic').value = mqttTopic;
+}
+
 function deleteDevice(id) {
-    if (confirm('Xóa thiết bị này?')) {
+    if (confirm('Xóa thiết bị này? Tất cả dữ liệu liên quan sẽ bị xóa.')) {
         fetch('/settings/iot/device/' + id + '/delete', { method: 'POST' })
             .then(() => window.location.reload());
     }
