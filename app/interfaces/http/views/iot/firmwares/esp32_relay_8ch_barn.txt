@@ -1,0 +1,276 @@
+/*
+ * CFarm ESP32 Relay 8 kênh - Điều khiển 4 tấm bạt
+ * ============================================================
+ * 
+ * Mỗi tấm bạt cần 2 relay: UP (lên) và DOWN (xuống)
+ * 4 tấm bạt = 8 relay = vừa đủ board 8 kênh
+ * 
+ * Kết nối:
+ * - GPIO 32 → IN1 (Bạt 1 UP)
+ * - GPIO 33 → IN2 (Bạt 1 DOWN)
+ * - GPIO 25 → IN3 (Bạt 2 UP)
+ * - GPIO 26 → IN4 (Bạt 2 DOWN)
+ * - GPIO 27 → IN5 (Bạt 3 UP)
+ * - GPIO 14 → IN6 (Bạt 3 DOWN)
+ * - GPIO 12 → IN7 (Bạt 4 UP)
+ * - GPIO 13 → IN8 (Bạt 4 DOWN)
+ * 
+ * Interlock pairs: {1,2}, {3,4}, {5,6}, {7,8}
+ * (UP và DOWN không thể bật cùng lúc)
+ * 
+ * MQTT PROTOCOL:
+ * - Subscribe: {device}/cmd
+ * - Format: {"action": "relay", "channel": 1-8, "state": "on/off"}
+ * - Heartbeat: {device}/heartbeat (30s)
+ * - State: {device}/state (khi relay thay đổi)
+ * 
+ * ============================================================
+ */
+
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+
+// ======================== CONFIG ========================
+// THAY ĐỔI CÁC GIÁ TRỊ DƯỚI ĐÂY
+#define DEVICE_CODE "YOUR_DEVICE_CODE"        // VD: esp-barn1-relay-001
+const char* WIFI_SSID = "YOUR_WIFI_SSID";    // Tên WiFi
+const char* WIFI_PASS = "YOUR_WIFI_PASSWORD"; // Mật khẩu WiFi
+const char* MQTT_SERVER = "app.cfarm.vn";     // MQTT Broker
+const char* MQTT_USER = "cfarm_device";
+const char* MQTT_PASS = "Abc@@123";
+const char* MQTT_TOPIC = "cfarm/YOUR_MQTT_TOPIC";  // VD: cfarm/barn1
+// ========================================================
+
+// GPIO pins cho 8 relay (IN1-IN8 trên board relay 8 kênh)
+const int RELAY_PINS[8] = {32, 33, 25, 26, 27, 14, 12, 13};
+
+// Interlock pairs: UP/DOWN không thể bật cùng lúc
+// {UP_channel, DOWN_channel}
+const int INTERLOCK_PAIRS[][2] = {
+    {1, 2},  // Bạt 1: CH1=UP, CH2=DOWN
+    {3, 4},  // Bạt 2: CH3=UP, CH4=DOWN
+    {5, 6},  // Bạt 3: CH5=UP, CH6=DOWN
+    {7, 8}   // Bạt 4: CH7=UP, CH8=DOWN
+};
+const int NUM_INTERLOCKS = 4;
+
+// Khai báo biến
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
+unsigned long lastHeartbeat = 0;
+const unsigned long HEARTBEAT_INTERVAL = 30000;
+bool relayState[8] = {false};  // Trạng thái relay (true=bật, false=tắt)
+
+void setup() {
+    Serial.begin(115200);
+    Serial.println("=== CFarm ESP32 Relay 8CH ===");
+    
+    // Cấu hình all pins là OUTPUT và tắt relay (HIGH = off với relay module)
+    for (int i = 0; i < 8; i++) {
+        pinMode(RELAY_PINS[i], OUTPUT);
+        digitalWrite(RELAY_PINS[i], HIGH);  // Tắt all relay
+        Serial.print("GPIO "); Serial.print(RELAY_PINS[i]); Serial.println(" ready");
+    }
+    
+    // Kết nối WiFi và MQTT
+    connectWiFi();
+    connectMqtt();
+    
+    Serial.println("Ready! Waiting for commands...");
+}
+
+void loop() {
+    if (!mqtt.connected()) {
+        Serial.println("MQTT disconnected, reconnecting...");
+        connectMqtt();
+    }
+    mqtt.loop();
+    
+    // Gửi heartbeat mỗi 30s
+    if (millis() - lastHeartbeat > HEARTBEAT_INTERVAL) {
+        lastHeartbeat = millis();
+        sendHeartbeat();
+    }
+}
+
+void connectWiFi() {
+    Serial.print("Connecting to WiFi: ");
+    Serial.println(WIFI_SSID);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("");
+        Serial.print("WiFi OK! IP: ");
+        Serial.println(WiFi.localIP());
+    } else {
+        Serial.println("");
+        Serial.println("WiFi FAILED!");
+    }
+}
+
+void connectMqtt() {
+    Serial.print("Connecting to MQTT: ");
+    Serial.println(MQTT_SERVER);
+    
+    mqtt.setServer(MQTT_SERVER, 1883);
+    mqtt.setCallback(mqttCallback);
+    
+    String clientId = "ESP32_" + String(DEVICE_CODE);
+    String willTopic = String(MQTT_TOPIC) + "/status";
+    String willPayload = "{\"device\":\"" + String(DEVICE_CODE) + "\",\"status\":\"offline\"}";
+    
+    int attempts = 0;
+    while (!mqtt.connected() && attempts < 10) {
+        if (mqtt.connect(clientId.c_str(), MQTT_USER, MQTT_PASS, 
+                        willTopic.c_str(), 1, true, willPayload.c_str())) {
+            Serial.println("MQTT connected!");
+            
+            // Subscribe các topic
+            mqtt.subscribe((String(MQTT_TOPIC) + "/cmd").c_str());
+            mqtt.subscribe((String(MQTT_TOPIC) + "/set").c_str());
+            
+            Serial.print("Subscribed to: ");
+            Serial.println(MQTT_TOPIC);
+            
+            sendHeartbeat();
+        } else {
+            Serial.print(".");
+            delay(1000);
+            attempts++;
+        }
+    }
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+    Serial.print("\n=== MQTT RECEIVED ===");
+    Serial.print("Topic: ");
+    Serial.println(topic);
+    
+    // Đọc payload
+    String msg = "";
+    for (int i = 0; i < length; i++) {
+        msg += (char)payload[i];
+    }
+    Serial.print("Payload: ");
+    Serial.println(msg);
+    
+    // Parse JSON
+    StaticJsonDocument<256> doc;
+    DeserializationError error = deserializeJson(doc, msg);
+    
+    if (error) {
+        Serial.print("JSON parse error: ");
+        Serial.println(error.c_str());
+        return;
+    }
+    
+    // Xử lý command
+    String action = doc["action"] | "";
+    
+    if (action == "relay") {
+        // Lệnh điều khiển 1 relay
+        // Format: {"action": "relay", "channel": 1, "state": "on"}
+        int ch = doc["channel"] | 0;
+        String st = doc["state"] | "";
+        
+        Serial.print("Relay command - Channel: ");
+        Serial.print(ch);
+        Serial.print(", State: ");
+        Serial.println(st);
+        
+        if (ch >= 1 && ch <= 8) {
+            setRelay(ch - 1, st == "on");  // channel 1-8 → index 0-7
+        } else {
+            Serial.println("Invalid channel!");
+        }
+        
+    } else if (action == "all") {
+        // Lệnh điều khiển tất cả relay
+        // Format: {"action": "all", "state": "on"}
+        String st = doc["state"] | "";
+        Serial.print("All relays - State: ");
+        Serial.println(st);
+        
+        for (int i = 0; i < 8; i++) {
+            setRelay(i, st == "on");
+        }
+        
+    } else if (action == "ping") {
+        // Lệnh ping để kiểm tra
+        Serial.println("Ping received!");
+        sendHeartbeat();
+        
+    } else {
+        Serial.print("Unknown action: ");
+        Serial.println(action);
+    }
+}
+
+void setRelay(int ch, bool on) {
+    if (ch < 0 || ch >= 8) return;
+    
+    Serial.print("setRelay() - Channel: ");
+    Serial.print(ch + 1);
+    Serial.print(" -> ");
+    Serial.println(on ? "ON" : "OFF");
+    
+    // Kiểm tra interlock - nếu bật relay thì check xem relay đối diện có đang bật không
+    if (on) {
+        for (int i = 0; i < NUM_INTERLOCKS; i++) {
+            int up = INTERLOCK_PAIRS[i][0] - 1;    // 0-7
+            int down = INTERLOCK_PAIRS[i][1] - 1; // 0-7
+            
+            // Nếu bật UP mà DOWN đang bật, hoặc ngược lại → block
+            if ((ch == up && relayState[down]) || (ch == down && relayState[up])) {
+                Serial.print("INTERLOCK blocked! Channel ");
+                Serial.print(ch + 1);
+                Serial.println(" cannot turn ON because opposite relay is ON");
+                return;
+            }
+        }
+    }
+    
+    // Điều khiển relay
+    // Relay module: LOW = ON, HIGH = OFF
+    digitalWrite(RELAY_PINS[ch], on ? LOW : HIGH);
+    relayState[ch] = on;
+    
+    Serial.print("Relay ");
+    Serial.print(ch + 1);
+    Serial.println(on ? " turned ON" : " turned OFF");
+    
+    // Gửi state về server
+    String payload = "{\"device\":\"" + String(DEVICE_CODE) + "\",\"channel\":" + 
+                    String(ch + 1) + ",\"state\":\"" + (on ? "on" : "off") + "\"}";
+    mqtt.publish((String(MQTT_TOPIC) + "/state").c_str(), payload.c_str());
+    Serial.print("State published: ");
+    Serial.println(payload);
+}
+
+void sendHeartbeat() {
+    // Tạo JSON heartbeat
+    String relayStates = "[";
+    for (int i = 0; i < 8; i++) {
+        relayStates += relayState[i] ? "1" : "0";
+        if (i < 7) relayStates += ",";
+    }
+    relayStates += "]";
+    
+    String payload = "{\"device\":\"" + String(DEVICE_CODE) + "\",\"status\":\"online\"," +
+                    "\"wifi_rssi\":" + String(WiFi.RSSI()) + "," +
+                    "\"ip\":\"" + WiFi.localIP().toString() + "\"," +
+                    "\"uptime\":" + String(millis() / 1000) + "," +
+                    "\"heap\":" + String(ESP.getFreeHeap()) + "," +
+                    "\"relays\":" + relayStates + "}";
+    
+    mqtt.publish((String(MQTT_TOPIC) + "/heartbeat").c_str(), payload.c_str(), true);
+    Serial.println("Heartbeat sent!");
+}

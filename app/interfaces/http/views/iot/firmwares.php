@@ -159,6 +159,8 @@ ob_start();
                 </select>
                 <textarea name="description" placeholder="Mô tả..." rows="2"
                           class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-600 rounded-lg px-3 py-2 text-sm"></textarea>
+                <textarea name="code" placeholder="Mã nguồn firmware (.ino)..." rows="8" required
+                          class="w-full border border-gray-300 dark:border-gray-600 bg-gray-900 text-green-400 font-mono rounded-lg px-3 py-2 text-xs"></textarea>
                 <label class="flex items-center gap-2 text-xs">
                     <input type="checkbox" name="is_latest" value="1" checked class="rounded">
                     <span>Đây là phiên bản mới nhất</span>
