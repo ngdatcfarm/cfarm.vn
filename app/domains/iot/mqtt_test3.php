@@ -25,10 +25,7 @@ echo "Step 3: Connecting...\n";
 
 try {
     $client->connect(
-        (new \PhpMqtt\Client\ConnectionSettings())
-            ->setUsername($user)
-            ->setPassword($pass)
-            ->setClientId('cfarm_listener')
+        new \PhpMqtt\Client\ConnectionSettings('', 1883, '', $user, $pass)
     );
     echo "Step 4: Connected!\n";
 } catch (Exception $e) {
