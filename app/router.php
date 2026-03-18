@@ -244,6 +244,23 @@ $r->addRoute('GET',  '/settings/iot/curtain/setup',        [CurtainSetupControll
 $r->addRoute('POST', '/settings/iot/curtain/store',         [CurtainSetupController::class, 'store']);
 $r->addRoute('POST', '/settings/iot/curtain/{id:\d+}/delete', [CurtainSetupController::class, 'delete']);
 
+// Firmware Controller
+use App\Interfaces\Http\Controllers\Web\IoT\FirmwareController;
+$r->addRoute('GET',  '/settings/iot/firmwares',            [FirmwareController::class, 'index']);
+$r->addRoute('POST', '/settings/iot/firmware/store',       [FirmwareController::class, 'store']);
+$r->addRoute('GET',  '/settings/iot/firmware/{id:\d+}/edit', [FirmwareController::class, 'edit']);
+$r->addRoute('POST', '/settings/iot/firmware/{id:\d+}/update', [FirmwareController::class, 'update']);
+$r->addRoute('POST', '/settings/iot/firmware/{id:\d+}/delete', [FirmwareController::class, 'delete']);
+$r->addRoute('POST', '/settings/iot/firmware/{id:\d+}/toggle', [FirmwareController::class, 'toggle']);
+
+// Device Type Controller (inline for simplicity)
+$r->addRoute('POST', '/settings/iot/type/store',            [DeviceController::class, 'type_store']);
+$r->addRoute('POST', '/settings/iot/type/{id:\d+}/toggle', [DeviceController::class, 'type_toggle']);
+
+// OTA Endpoints
+$r->addRoute('GET', '/api/firmware/{device_type:\d+}/latest', [FirmwareController::class, 'ota_check']);
+$r->addRoute('GET', '/api/firmware/download/{id:\d+}', [FirmwareController::class, 'ota_download']);
+
 // =============================================================================
 
 // ------------------------------------------------------------------

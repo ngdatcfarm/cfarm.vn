@@ -154,15 +154,95 @@ class DeviceController
     }
 
     /**
-     * POST /settings/iot/device/{id}/delete
+     * POST /settings/iot/device/{id}/delete - Delete device and all related data
      */
     public function device_delete(array $vars): void
     {
         $id = (int)$vars['id'];
         
-        $this->pdo->prepare("DELETE FROM devices WHERE id = :id")->execute([':id' => $id]);
+        // Get related IDs first
+        $stmt = $this->pdo->prepare("SELECT id FROM device_channels WHERE device_id = ?");
+        $stmt->execute([$id]);
+        $channel_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        $stmt = $this->pdo->prepare("SELECT id FROM curtain_configs WHERE device_id = ?");
+        $stmt->execute([$id]);
+        $curtain_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        // Delete in correct order (child tables first)
+        // 1. device_state_log
+        if (!empty($channel_ids)) {
+            $placeholders = implode(',', array_fill(0, count($channel_ids), '?'));
+            $this->pdo->prepare("DELETE FROM device_state_log WHERE channel_id IN ($placeholders)")->execute($channel_ids);
+        }
+        if (!empty($curtain_ids)) {
+            $placeholders = implode(',', array_fill(0, count($curtain_ids), '?'));
+            $this->pdo->prepare("DELETE FROM device_state_log WHERE curtain_config_id IN ($placeholders)")->execute($curtain_ids);
+        }
+        
+        // 2. device_states
+        if (!empty($channel_ids)) {
+            $placeholders = implode(',', array_fill(0, count($channel_ids), '?'));
+            $this->pdo->prepare("DELETE FROM device_states WHERE channel_id IN ($placeholders)")->execute($channel_ids);
+        }
+        
+        // 3. device_commands
+        if (!empty($channel_ids)) {
+            $placeholders = implode(',', array_fill(0, count($channel_ids), '?'));
+            $this->pdo->prepare("DELETE FROM device_commands WHERE channel_id IN ($placeholders)")->execute($channel_ids);
+        }
+        
+        // 4. curtain_configs (will cascade via FK but being explicit)
+        $this->pdo->prepare("DELETE FROM curtain_configs WHERE device_id = ?")->execute([$id]);
+        
+        // 5. device_channels
+        $this->pdo->prepare("DELETE FROM device_channels WHERE device_id = ?")->execute([$id]);
+        
+        // 6. device itself
+        $this->pdo->prepare("DELETE FROM devices WHERE id = ?")->execute([':id' => $id]);
+        
+        // Use execute with array
+        $this->pdo->prepare("DELETE FROM devices WHERE id = ?")->execute([$id]);
         
         header('Location: /settings/iot?tab=devices');
+        exit;
+    }
+
+    /**
+     * POST /settings/iot/type/store - Add new device type
+     */
+    public function type_store(array $vars): void
+    {
+        $name = trim($_POST['name'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        $device_class = $_POST['device_class'] ?? 'relay';
+        $total_channels = (int)($_POST['total_channels'] ?? 8);
+
+        if (!$name) {
+            header('Location: /settings/iot/firmwares?error=missing_fields');
+            exit;
+        }
+
+        $this->pdo->prepare("
+            INSERT INTO device_types (name, description, device_class, total_channels, is_active, created_at)
+            VALUES (?, ?, ?, ?, 1, NOW())
+        ")->execute([$name, $description, $device_class, $total_channels]);
+
+        header('Location: /settings/iot/firmwares?saved=1');
+        exit;
+    }
+
+    /**
+     * POST /settings/iot/type/{id}/toggle - Toggle device type active status
+     */
+    public function type_toggle(array $vars): void
+    {
+        $id = (int)$vars['id'];
+        
+        $stmt = $this->pdo->prepare("UPDATE device_types SET is_active = NOT is_active WHERE id = ?");
+        $stmt->execute([$id]);
+
+        header('Location: /settings/iot/firmwares');
         exit;
     }
 
