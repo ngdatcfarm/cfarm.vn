@@ -160,50 +160,11 @@ class DeviceController
     {
         $id = (int)$vars['id'];
         
-        // Get related IDs first
-        $stmt = $this->pdo->prepare("SELECT id FROM device_channels WHERE device_id = ?");
+        // Delete device - CASCADE will handle related tables
+        $stmt = $this->pdo->prepare("DELETE FROM devices WHERE id = ?");
         $stmt->execute([$id]);
-        $channel_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
         
-        $stmt = $this->pdo->prepare("SELECT id FROM curtain_configs WHERE device_id = ?");
-        $stmt->execute([$id]);
-        $curtain_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        
-        // Delete in correct order (child tables first)
-        // 1. device_state_log
-        if (!empty($channel_ids)) {
-            $placeholders = implode(',', array_fill(0, count($channel_ids), '?'));
-            $this->pdo->prepare("DELETE FROM device_state_log WHERE channel_id IN ($placeholders)")->execute($channel_ids);
-        }
-        if (!empty($curtain_ids)) {
-            $placeholders = implode(',', array_fill(0, count($curtain_ids), '?'));
-            $this->pdo->prepare("DELETE FROM device_state_log WHERE curtain_config_id IN ($placeholders)")->execute($curtain_ids);
-        }
-        
-        // 2. device_states
-        if (!empty($channel_ids)) {
-            $placeholders = implode(',', array_fill(0, count($channel_ids), '?'));
-            $this->pdo->prepare("DELETE FROM device_states WHERE channel_id IN ($placeholders)")->execute($channel_ids);
-        }
-        
-        // 3. device_commands
-        if (!empty($channel_ids)) {
-            $placeholders = implode(',', array_fill(0, count($channel_ids), '?'));
-            $this->pdo->prepare("DELETE FROM device_commands WHERE channel_id IN ($placeholders)")->execute($channel_ids);
-        }
-        
-        // 4. curtain_configs (will cascade via FK but being explicit)
-        $this->pdo->prepare("DELETE FROM curtain_configs WHERE device_id = ?")->execute([$id]);
-        
-        // 5. device_channels
-        $this->pdo->prepare("DELETE FROM device_channels WHERE device_id = ?")->execute([$id]);
-        
-        // 6. device itself
-        $this->pdo->prepare("DELETE FROM devices WHERE id = ?")->execute([':id' => $id]);
-        
-        // Use execute with array
-        $this->pdo->prepare("DELETE FROM devices WHERE id = ?")->execute([$id]);
-        
+        // Redirect back
         header('Location: /settings/iot?tab=devices');
         exit;
     }
