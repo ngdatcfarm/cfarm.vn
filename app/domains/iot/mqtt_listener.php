@@ -72,11 +72,41 @@ function handleMessage($pdo, $topic, $message, $msgType) {
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$device) {
-        echo "  -> Device not found: $mqttTopic\n";
-        return;
+        // Auto-create device if not found (first time connecting)
+        echo "  -> Auto-creating new device: $mqttTopic\n";
+        
+        // Get device_code from heartbeat message
+        $data = json_decode($message, true);
+        $deviceCode = $data['device'] ?? basename($mqttTopic);
+        
+        // Check if device_type_id 1 exists (ESP32 Relay 8CH)
+        $typeCheck = $pdo->query("SELECT id FROM device_types WHERE id = 1")->fetchColumn();
+        if (!$typeCheck) {
+            echo "  -> ERROR: No device type found!\n";
+            return;
+        }
+        
+        // Insert new device
+        $pdo->prepare("
+            INSERT INTO devices (device_code, name, device_type_id, mqtt_topic, is_online, created_at)
+            VALUES (?, ?, 1, ?, 1, NOW())
+        ")->execute([$deviceCode, $deviceCode, $mqttTopic]);
+        
+        $deviceId = (int)$pdo->lastInsertId();
+        
+        // Auto-create 8 channels for this device
+        $defaultPins = [32, 33, 25, 26, 27, 14, 12, 13];
+        for ($ch = 1; $ch <= 8; $ch++) {
+            $pdo->prepare("
+                INSERT INTO device_channels (device_id, channel_number, name, channel_type, gpio_pin, is_active)
+                VALUES (?, ?, ?, 'other', ?, 1)
+            ")->execute([$deviceId, $ch, 'Kênh ' . $ch, $defaultPins[$ch-1]]);
+        }
+        
+        echo "  -> Created new device ID: $deviceId with 8 channels\n";
+    } else {
+        $deviceId = $device['id'];
     }
-    
-    $deviceId = $device['id'];
     
     if ($msgType === 'heartbeat' || $msgType === 'status') {
         $data = json_decode($message, true);
