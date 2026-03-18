@@ -390,4 +390,32 @@ class DeviceController
 
         $this->json(['ok' => $result, 'message' => $result ? 'Đã gửi lệnh test' : 'Gửi thất bại']);
     }
+
+    /**
+     * GET /settings/iot/device/{id}/json - Get device info for firmware generation
+     */
+    public function device_json(array $vars): void
+    {
+        $id = (int)$vars['id'];
+        
+        $stmt = $this->pdo->prepare("
+            SELECT d.*, dt.name as type_name, dt.device_class, dt.total_channels
+            FROM devices d
+            JOIN device_types dt ON dt.id = d.device_type_id
+            WHERE d.id = ?
+        ");
+        $stmt->execute([$id]);
+        $device = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$device) {
+            $this->json(['ok' => false, 'message' => 'Device not found'], 404);
+        }
+
+        // Get channels
+        $stmt = $this->pdo->prepare("SELECT * FROM device_channels WHERE device_id = ? ORDER BY channel_number");
+        $stmt->execute([$id]);
+        $device['channels'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->json(['ok' => true] + $device);
+    }
 }

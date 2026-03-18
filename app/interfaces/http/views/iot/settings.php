@@ -172,6 +172,7 @@ ob_start();
                         <?php endif; ?>
                     </td>
                     <td class="px-2 py-3">
+                        <button onclick="viewFirmware(<?= $d->id ?>, '<?= htmlspecialchars($d->mqtt_topic, ENT_QUOTES) ?>')" class="text-blue-500 hover:text-blue-700 text-xs" title="Xem firmware">📦</button>
                         <button onclick="deleteDevice(<?= $d->id ?>)" class="text-red-500 hover:text-red-700 text-xs">🗑️</button>
                     </td>
                 </tr>
@@ -233,6 +234,43 @@ ob_start();
 </div>
 
 <script>
+// Firmware data - loaded from PHP
+const firmwareData = {};
+
+<?php 
+// Load all firmwares for JS
+$fwStmt = $pdo->query("SELECT f.*, dt.name as type_name FROM device_firmwares f JOIN device_types dt ON dt.id = f.device_type_id WHERE f.is_active = 1");
+while ($fw = $fwStmt->fetch(PDO::FETCH_OBJ)) {
+    echo "firmwareData[{$fw->device_type_id}] = " . json_encode($fw) . ";\n";
+}
+?>
+
+function viewFirmware(deviceId, mqttTopic) {
+    // First get device type
+    fetch('/settings/iot/device/' + deviceId + '/json')
+        .then(r => r.json())
+        .then(data => {
+            const fw = firmwareData[data.device_type_id];
+            if (!fw) {
+                alert('Chưa có firmware cho loại thiết bị này!');
+                return;
+            }
+            
+            // Generate personalized firmware code
+            let code = fw.code
+                .replace(/YOUR_DEVICE_CODE/g, data.device_code || 'esp-device')
+                .replace(/YOUR_MQTT_TOPIC/g, mqttTopic || 'cfarm/device')
+                .replace(/YOUR_WIFI_SSID/g, 'YOUR_WIFI_SSID')
+                .replace(/YOUR_WIFI_PASSWORD/g, 'YOUR_WIFI_PASSWORD');
+            
+            // Show in modal or new window
+            const win = window.open('', '_blank');
+            win.document.write('<pre style="background:#1a1a1a;color:#0f0;padding:20px;font-family:monospace;font-size:12px;white-space:pre-wrap;">' + code.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>');
+        })
+        .catch(e => {
+            alert('Không lấy được thông tin thiết bị');
+        });
+}
 // Get existing device count for barn
 const deviceCountByBarn = <?php 
 $countStmt = $pdo->query("SELECT barn_id, COUNT(*) as cnt FROM devices WHERE barn_id IS NOT NULL GROUP BY barn_id");

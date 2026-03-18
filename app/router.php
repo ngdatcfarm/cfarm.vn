@@ -229,6 +229,7 @@ $r->addRoute('POST', '/settings/iot/device/{id:\d+}/delete',[DeviceController::c
 $r->addRoute('POST', '/settings/iot/device/{id:\d+}/pins',  [DeviceController::class, 'device_pins_save']);
 $r->addRoute('POST', '/settings/iot/device/{id:\d+}/channels',[DeviceController::class, 'device_channels_save']);
 $r->addRoute('POST', '/settings/iot/device/{id:\d+}/test', [DeviceController::class, 'device_test']);
+$r->addRoute('GET', '/settings/iot/device/{id:\d+}/json', [DeviceController::class, 'device_json']);
 
 // Curtain Controller
 use App\Interfaces\Http\Controllers\Web\IoT\CurtainController;
