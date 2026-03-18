@@ -1,90 +1,54 @@
 <?php
 /**
- * MQTT Listener - Using proc_open with mosquitto_sub
+ * MQTT Listener - Simple shell approach
  */
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
 
-// Database
 $pdo = require __DIR__ . '/../../../app/shared/database/mysql.php';
 
-echo "Starting MQTT listener...\n";
+echo "Starting...\n";
 
-// Open mosquitto_sub process
-$descriptorspec = [
-    0 => ["pipe", "r"],  // stdin
-    1 => ["pipe", "w"],  // stdout
-    2 => ["pipe", "w"],   // stderr
-];
+// Keep reading from mosquitto_sub
+$cmd = "mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t 'cfarm/#' -v --id cfarm_listener_php";
 
-$process = proc_open(
-    "mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t 'cfarm/#' -v --id cfarm_listener",
-    $descriptorspec,
-    $pipes,
-    null,
-    null,
-    ["bypass_shell" => true]
-);
+$handle = popen($cmd . " 2>&1", 'r');
 
-if (!is_resource($process)) {
-    echo "Failed to start mosquitto_sub\n";
+if (!$handle) {
+    echo "Failed to start\n";
     exit(1);
 }
 
-echo "mosquitto_sub started! Listening...\n";
+echo "Listening...\n";
 
-stream_set_blocking($pipes[1], false);
+stream_set_blocking($handle, false);
 
-$lastCheck = time();
-
-while (true) {
-    // Read from stdout
-    $data = fgets($pipes[1]);
-    if ($data) {
-        $line = trim($data);
-        if ($line) {
+while (!feof($handle)) {
+    $line = fgets($handle);
+    if ($line) {
+        $line = trim($line);
+        if ($line && strpos($line, 'cfarm/') === 0) {
+            echo "RX: $line\n";
             processLine($pdo, $line);
         }
     }
-    
-    // Check stderr
-    $err = fgets($pipes[2]);
-    if ($err) {
-        echo "STDERR: " . trim($err) . "\n";
-    }
-    
-    // Check if process died
-    $status = proc_get_status($process);
-    if (!$status['running']) {
-        echo "Process died, restarting...\n";
-        break;
-    }
-    
-    // Cleanup every 60 seconds
-    if (time() - $lastCheck > 60) {
-        $lastCheck = time();
-        cleanupOffline($pdo);
-        echo "[" . date('H:i:s') . "] Cleaned up offline devices\n";
-    }
-    
-    usleep(100000); // 100ms
+    usleep(100000);
 }
 
-proc_close($process);
+pclose($handle);
 
 function processLine($pdo, $line) {
-    // Parse: topic payload
     $pos = strpos($line, ' ');
     if ($pos === false) return;
     
-    $topic = substr($line, 0, $pos);
-    $message = substr($line, $pos + 1);
+    $topic = trim(substr($line, 0, $pos));
+    $message = trim(substr($line, $pos + 1));
     
     $parts = explode('/', $topic);
     if (count($parts) < 3) return;
     
     $mqttTopic = $parts[0] . '/' . $parts[1];
-    $msgType = $parts[2];
+    $msgType = $parts[2] ?? '';
     
     // Find device
     $stmt = $pdo->prepare("SELECT id FROM devices WHERE mqtt_topic = ?");
@@ -92,7 +56,6 @@ function processLine($pdo, $line) {
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$device) {
-        // Create new device
         $data = json_decode($message, true);
         $deviceCode = $data['device'] ?? basename($mqttTopic);
         
@@ -103,7 +66,6 @@ function processLine($pdo, $line) {
         
         $deviceId = (int)$pdo->lastInsertId();
         
-        // Create channels
         $pins = [32, 33, 25, 26, 27, 14, 12, 13];
         for ($ch = 1; $ch <= 8; $ch++) {
             $pdo->prepare("
@@ -112,12 +74,11 @@ function processLine($pdo, $line) {
             ")->execute([$deviceId, $ch, 'Kênh ' . $ch, $pins[$ch-1]]);
         }
         
-        echo "Created new device: $deviceCode\n";
+        echo "Created: $deviceCode\n";
     } else {
         $deviceId = $device['id'];
     }
     
-    // Update status
     if ($msgType === 'heartbeat' || $msgType === 'status') {
         $data = json_decode($message, true);
         if (!$data) return;
@@ -142,13 +103,4 @@ function processLine($pdo, $line) {
         
         echo "Updated device $deviceId\n";
     }
-}
-
-function cleanupOffline($pdo) {
-    $pdo->exec("
-        UPDATE devices 
-        SET is_online = 0 
-        WHERE is_online = 1 
-        AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE))
-    ");
 }
