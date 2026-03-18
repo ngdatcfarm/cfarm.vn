@@ -10,7 +10,7 @@ ob_implicit_flush(true);
 
 echo "Step 1: Loading autoload...\n";
 
-require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../../../vendor/autoload.php';
 
 echo "Step 2: Creating client...\n";
 
