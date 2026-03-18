@@ -1,92 +1,101 @@
 <?php
 /**
- * MQTT Listener - Lắng nghe heartbeat từ ESP32 và cập nhật trạng thái
- * 
- * Cách chạy:
- * 1. composer install (đã có php-mqtt/client)
- * 2. Chạy: php app/domains/iot/mqtt_listener.php
- * 3. Hoặc thêm vào supervisor/systemd để chạy liên tục
+ * MQTT Listener - Using proc_open with mosquitto_sub
  */
 
-require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../../../vendor/autoload.php';
 
-use PhpMqtt\Client\MqttClient;
-use PhpMqtt\Client\ConnectionSettings;
+// Database
+$pdo = require __DIR__ . '/../../../app/shared/database/mysql.php';
 
-echo "[MQTT Listener] Starting...\n";
+echo "Starting MQTT listener...\n";
 
-$host = '103.166.183.215';
-$port = 1883;
-$user = 'cfarm_server';
-$pass = 'Abc@@123';
+// Open mosquitto_sub process
+$descriptorspec = [
+    0 => ["pipe", "r"],  // stdin
+    1 => ["pipe", "w"],  // stdout
+    2 => ["pipe", "w"],   // stderr
+];
 
-// Database connection
-$pdo = require __DIR__ . '/../../app/shared/database/mysql.php';
+$process = proc_open(
+    "mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t 'cfarm/#' -v --id cfarm_listener",
+    $descriptorspec,
+    $pipes,
+    null,
+    null,
+    ["bypass_shell" => true]
+);
 
-try {
-    $mqtt = new MqttClient($host, $port, 'cfarm_listener_' . getmypid());
-    
-    $mqtt->connect(
-        (new ConnectionSettings)
-            ->setUsername($user)
-            ->setPassword($pass)
-            ->setKeepAliveInterval(60)
-    );
-    
-    echo "[MQTT] Connected to broker!\n";
-    
-    // Subscribe to all device topics
-    $mqtt->subscribe('+/heartbeat', function($topic, $message) use ($pdo) {
-        handleMessage($pdo, $topic, $message, 'heartbeat');
-    }, 0);
-    
-    $mqtt->subscribe('+/status', function($topic, $message) use ($pdo) {
-        handleMessage($pdo, $topic, $message, 'status');
-    }, 0);
-    
-    $mqtt->subscribe('+/state', function($topic, $message) use ($pdo) {
-        handleMessage($pdo, $topic, $message, 'state');
-    }, 0);
-    
-    echo "[MQTT] Subscribed to +/heartbeat, +/status, +/state\n";
-    echo "[MQTT] Listening for messages...\n";
-    
-    $mqtt->loop(true);
-    
-} catch (\Exception $e) {
-    echo "[MQTT] Error: " . $e->getMessage() . "\n";
+if (!is_resource($process)) {
+    echo "Failed to start mosquitto_sub\n";
+    exit(1);
 }
 
-function handleMessage($pdo, $topic, $message, $msgType) {
-    echo "[" . date('H:i:s') . "] Received: $topic\n";
+echo "mosquitto_sub started! Listening...\n";
+
+stream_set_blocking($pipes[1], false);
+
+$lastCheck = time();
+
+while (true) {
+    // Read from stdout
+    $data = fgets($pipes[1]);
+    if ($data) {
+        $line = trim($data);
+        if ($line) {
+            processLine($pdo, $line);
+        }
+    }
     
-    // Parse topic: cfarm/esp-barn1-relay-001/heartbeat
+    // Check stderr
+    $err = fgets($pipes[2]);
+    if ($err) {
+        echo "STDERR: " . trim($err) . "\n";
+    }
+    
+    // Check if process died
+    $status = proc_get_status($process);
+    if (!$status['running']) {
+        echo "Process died, restarting...\n";
+        break;
+    }
+    
+    // Cleanup every 60 seconds
+    if (time() - $lastCheck > 60) {
+        $lastCheck = time();
+        cleanupOffline($pdo);
+        echo "[" . date('H:i:s') . "] Cleaned up offline devices\n";
+    }
+    
+    usleep(100000); // 100ms
+}
+
+proc_close($process);
+
+function processLine($pdo, $line) {
+    // Parse: topic payload
+    $pos = strpos($line, ' ');
+    if ($pos === false) return;
+    
+    $topic = substr($line, 0, $pos);
+    $message = substr($line, $pos + 1);
+    
     $parts = explode('/', $topic);
     if (count($parts) < 3) return;
     
     $mqttTopic = $parts[0] . '/' . $parts[1];
+    $msgType = $parts[2];
     
-    // Find device by mqtt_topic
+    // Find device
     $stmt = $pdo->prepare("SELECT id FROM devices WHERE mqtt_topic = ?");
     $stmt->execute([$mqttTopic]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$device) {
-        // Auto-create device if not found (first time connecting)
-        echo "  -> Auto-creating new device: $mqttTopic\n";
-        
-        // Get device_code from heartbeat message
+        // Create new device
         $data = json_decode($message, true);
         $deviceCode = $data['device'] ?? basename($mqttTopic);
         
-        // Check if device_type_id 1 exists (ESP32 Relay 8CH)
-        $typeCheck = $pdo->query("SELECT id FROM device_types WHERE id = 1")->fetchColumn();
-        if (!$typeCheck) {
-            echo "  -> ERROR: No device type found!\n";
-            return;
-        }
-        
-        // Insert new device
         $pdo->prepare("
             INSERT INTO devices (device_code, name, device_type_id, mqtt_topic, is_online, created_at)
             VALUES (?, ?, 1, ?, 1, NOW())
@@ -94,25 +103,25 @@ function handleMessage($pdo, $topic, $message, $msgType) {
         
         $deviceId = (int)$pdo->lastInsertId();
         
-        // Auto-create 8 channels for this device
-        $defaultPins = [32, 33, 25, 26, 27, 14, 12, 13];
+        // Create channels
+        $pins = [32, 33, 25, 26, 27, 14, 12, 13];
         for ($ch = 1; $ch <= 8; $ch++) {
             $pdo->prepare("
                 INSERT INTO device_channels (device_id, channel_number, name, channel_type, gpio_pin, is_active)
                 VALUES (?, ?, ?, 'other', ?, 1)
-            ")->execute([$deviceId, $ch, 'Kênh ' . $ch, $defaultPins[$ch-1]]);
+            ")->execute([$deviceId, $ch, 'Kênh ' . $ch, $pins[$ch-1]]);
         }
         
-        echo "  -> Created new device ID: $deviceId with 8 channels\n";
+        echo "Created new device: $deviceCode\n";
     } else {
         $deviceId = $device['id'];
     }
     
+    // Update status
     if ($msgType === 'heartbeat' || $msgType === 'status') {
         $data = json_decode($message, true);
         if (!$data) return;
         
-        // Update device status
         $pdo->prepare("
             UPDATE devices SET
                 is_online = 1,
@@ -131,57 +140,15 @@ function handleMessage($pdo, $topic, $message, $msgType) {
             $deviceId
         ]);
         
-        // Update relay states if available
-        if (isset($data['relays']) && is_array($data['relays'])) {
-            $channelStmt = $pdo->prepare("
-                SELECT id FROM device_channels WHERE device_id = ? ORDER BY channel_number
-            ");
-            $channelStmt->execute([$deviceId]);
-            $channels = $channelStmt->fetchAll(PDO::FETCH_COLUMN);
-            
-            foreach ($data['relays'] as $index => $state) {
-                if (isset($channels[$index])) {
-                    $pdo->prepare("
-                        INSERT INTO device_states (device_id, channel_id, state, updated_at)
-                        VALUES (?, ?, ?, NOW())
-                        ON DUPLICATE KEY UPDATE state = VALUES(state), updated_at = NOW()
-                    ")->execute([$deviceId, $channels[$index], $state ? 'on' : 'off']);
-                }
-            }
-        }
-        
-        echo "  -> Device $deviceId updated as ONLINE\n";
-    }
-    elseif ($msgType === 'state') {
-        $data = json_decode($message, true);
-        if (!$data || !isset($data['channel'])) return;
-        
-        $stmt = $pdo->prepare("
-            SELECT id FROM device_channels 
-            WHERE device_id = ? AND channel_number = ?
-        ");
-        $stmt->execute([$deviceId, $data['channel']]);
-        $channel = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($channel) {
-            $pdo->prepare("
-                INSERT INTO device_states (device_id, channel_id, state, updated_at)
-                VALUES (?, ?, ?, NOW())
-                ON DUPLICATE KEY UPDATE state = VALUES(state), updated_at = NOW()
-            ")->execute([$deviceId, $channel['id'], $data['state'] ?? 'off']);
-            
-            echo "  -> Channel {$data['channel']} state updated\n";
-        }
+        echo "Updated device $deviceId\n";
     }
 }
 
-// Cleanup function for offline devices
-function cleanupOfflineDevices($pdo) {
+function cleanupOffline($pdo) {
     $pdo->exec("
         UPDATE devices 
         SET is_online = 0 
         WHERE is_online = 1 
         AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE))
     ");
-    echo "[" . date('H:i:s') . "] Cleaned up offline devices\n";
 }
