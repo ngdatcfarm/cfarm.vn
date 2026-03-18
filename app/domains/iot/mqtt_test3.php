@@ -16,8 +16,8 @@ echo "Step 2: Creating client...\n";
 
 $host = '103.166.183.215';
 $port = 1883;
-$user = '';
-$pass = '';
+$user = 'cfarm_device';
+$pass = 'Abc@@123';
 
 $client = new \PhpMqtt\Client\MqttClient($host, $port, 'test123');
 
@@ -25,7 +25,10 @@ echo "Step 3: Connecting...\n";
 
 try {
     $client->connect(
-        new \PhpMqtt\Client\ConnectionSettings(null, null, $user, $pass)
+        (new \PhpMqtt\Client\ConnectionSettings())
+            ->setUsername($user)
+            ->setPassword($pass)
+            ->setClientId('cfarm_listener')
     );
     echo "Step 4: Connected!\n";
 } catch (Exception $e) {
