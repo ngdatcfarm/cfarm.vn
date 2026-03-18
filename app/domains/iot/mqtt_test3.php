@@ -16,8 +16,8 @@ echo "Step 2: Creating client...\n";
 
 $host = '103.166.183.215';
 $port = 1883;
-$user = 'cfarm_device';
-$pass = 'Abc@@123';
+$user = '';
+$pass = '';
 
 $client = new \PhpMqtt\Client\MqttClient($host, $port, 'test123');
 
