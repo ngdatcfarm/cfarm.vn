@@ -2,6 +2,38 @@
 global $pdo;
 
 $title = 'Cài đặt IoT';
+$tab = $_GET['tab'] ?? 'devices';
+
+// Get device types
+$device_types = [];
+$barns = [];
+$devices = [];
+$curtains = [];
+
+try {
+    $device_types = $pdo->query("SELECT * FROM device_types ORDER BY name")->fetchAll(PDO::FETCH_OBJ);
+    $barns = $pdo->query("SELECT * FROM barns ORDER BY number")->fetchAll(PDO::FETCH_OBJ);
+    
+    // Get devices
+    $devices = $pdo->query("
+        SELECT d.*, b.name as barn_name, dt.name as type_name
+        FROM devices d
+        LEFT JOIN barns b ON b.id = d.barn_id
+        LEFT JOIN device_types dt ON dt.id = d.device_type_id
+        ORDER BY b.name, d.name
+    ")->fetchAll(PDO::FETCH_OBJ);
+    
+    // Get curtains
+    $curtains = $pdo->query("
+        SELECT cc.*, b.name as barn_name, d.name as device_name
+        FROM curtain_configs cc
+        LEFT JOIN barns b ON b.id = cc.barn_id
+        LEFT JOIN devices d ON d.id = cc.device_id
+        ORDER BY b.name, cc.name
+    ")->fetchAll(PDO::FETCH_OBJ);
+} catch (Exception $e) {
+    error_log("IoT settings error: " . $e->getMessage());
+}
 ?>
 
 <div class="mb-4">
