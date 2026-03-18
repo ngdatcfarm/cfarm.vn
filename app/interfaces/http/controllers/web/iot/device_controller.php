@@ -282,6 +282,34 @@ class DeviceController
     }
 
     /**
+     * POST /settings/iot/type/{id}/update - Update device type
+     */
+    public function type_update(array $vars): void
+    {
+        $id = (int)$vars['id'];
+        
+        $name = trim($_POST['name'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        $device_class = $_POST['device_class'] ?? 'relay';
+        $total_channels = (int)($_POST['total_channels'] ?? 8);
+
+        if (!$name) {
+            header('Location: /settings/iot/firmwares?error=missing_fields');
+            exit;
+        }
+
+        $stmt = $this->pdo->prepare("
+            UPDATE device_types 
+            SET name = ?, description = ?, device_class = ?, total_channels = ?, updated_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$name, $description, $device_class, $total_channels, $id]);
+
+        header('Location: /settings/iot/firmwares?saved=1');
+        exit;
+    }
+
+    /**
      * POST /settings/iot/device/{id}/pins - Lưu GPIO pins
      */
     public function device_pins_save(array $vars): void

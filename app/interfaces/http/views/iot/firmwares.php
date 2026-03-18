@@ -105,6 +105,10 @@ ob_start();
                             class="text-xs px-2 py-1 rounded <?= $type->is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400' ?>">
                         <?= $type->is_active ? 'Active' : 'Disabled' ?>
                     </button>
+                    <button onclick="editType(<?= $type->id ?>, '<?= htmlspecialchars($type->name, ENT_QUOTES) ?>', '<?= htmlspecialchars($type->description ?? '', ENT_QUOTES) ?>', '<?= $type->device_class ?>', <?= $type->total_channels ?>)" 
+                            class="text-blue-500 hover:text-blue-700 text-xs" title="Sửa loại thiết bị">
+                        ✏️
+                    </button>
                     <button onclick="deleteType(<?= $type->id ?>)" 
                             class="text-red-500 hover:text-red-700 text-xs" title="Xóa loại thiết bị">
                         🗑️
@@ -222,6 +226,31 @@ function deleteType(id) {
         fetch('/settings/iot/type/' + id + '/delete', { method: 'POST' })
             .then(() => window.location.reload());
     }
+}
+
+function editType(id, name, description, deviceClass, totalChannels) {
+    const newName = prompt('Tên loại thiết bị:', name);
+    if (newName === null || newName.trim() === '') return;
+    
+    const newDesc = prompt('Mô tả:', description || '');
+    if (newDesc === null) return;
+    
+    const newClass = prompt('Loại (relay/sensor/mixed):', deviceClass);
+    if (newClass === null) return;
+    
+    const newChannels = prompt('Số kênh:', totalChannels);
+    if (newChannels === null) return;
+    
+    const formData = new FormData();
+    formData.append('name', newName.trim());
+    formData.append('description', newDesc.trim());
+    formData.append('device_class', newClass.trim());
+    formData.append('total_channels', parseInt(newChannels) || 8);
+    
+    fetch('/settings/iot/type/' + id + '/update', {
+        method: 'POST',
+        body: formData
+    }).then(() => window.location.reload());
 }
 
 function deleteFirmware(id) {
