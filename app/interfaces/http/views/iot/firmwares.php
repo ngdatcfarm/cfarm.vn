@@ -40,7 +40,15 @@ ob_start();
 
     <?php if (isset($_GET['error'])): ?>
     <div class="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
-        <?= $_GET['error'] === 'missing_fields' ? '❌ Vui lòng điền đầy đủ thông tin' : '❌ Lỗi' ?>
+        <?php if ($_GET['error'] === 'missing_fields'): ?>
+            ❌ Vui lòng điền đầy đủ thông tin
+        <?php elseif ($_GET['error'] === 'type_in_use'): ?>
+            ❌ Không thể xóa! Đang có thiết bị sử dụng loại này
+        <?php elseif ($_GET['error'] === 'type_has_firmware'): ?>
+            ❌ Không thể xóa! Đang có firmware cho loại này
+        <?php else: ?>
+            ❌ Lỗi
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
@@ -96,6 +104,10 @@ ob_start();
                     <button onclick="toggleType(<?= $type->id ?>)" 
                             class="text-xs px-2 py-1 rounded <?= $type->is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400' ?>">
                         <?= $type->is_active ? 'Active' : 'Disabled' ?>
+                    </button>
+                    <button onclick="deleteType(<?= $type->id ?>)" 
+                            class="text-red-500 hover:text-red-700 text-xs" title="Xóa loại thiết bị">
+                        🗑️
                     </button>
                     <?php if ($type->firmware_count > 0): ?>
                     <a href="/settings/iot/firmware/<?= $type->id ?>/type" 
@@ -203,6 +215,13 @@ ob_start();
 function toggleType(id) {
     fetch('/settings/iot/type/' + id + '/toggle', { method: 'POST' })
         .then(() => window.location.reload());
+}
+
+function deleteType(id) {
+    if (confirm('Xóa loại thiết bị này? (Chỉ xóa được khi không có thiết bị hoặc firmware nào)')) {
+        fetch('/settings/iot/type/' + id + '/delete', { method: 'POST' })
+            .then(() => window.location.reload());
+    }
 }
 
 function deleteFirmware(id) {

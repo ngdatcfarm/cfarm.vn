@@ -247,6 +247,41 @@ class DeviceController
     }
 
     /**
+     * POST /settings/iot/type/{id}/delete - Delete device type
+     */
+    public function type_delete(array $vars): void
+    {
+        $id = (int)$vars['id'];
+        
+        // Check if there are devices using this type
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM devices WHERE device_type_id = ?");
+        $stmt->execute([$id]);
+        $device_count = (int)$stmt->fetchColumn();
+        
+        if ($device_count > 0) {
+            header('Location: /settings/iot/firmwares?error=type_in_use');
+            exit;
+        }
+        
+        // Check if there are firmwares for this type
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM device_firmwares WHERE device_type_id = ?");
+        $stmt->execute([$id]);
+        $firmware_count = (int)$stmt->fetchColumn();
+        
+        if ($firmware_count > 0) {
+            header('Location: /settings/iot/firmwares?error=type_has_firmware');
+            exit;
+        }
+        
+        // Delete the device type
+        $stmt = $this->pdo->prepare("DELETE FROM device_types WHERE id = ?");
+        $stmt->execute([$id]);
+
+        header('Location: /settings/iot/firmwares');
+        exit;
+    }
+
+    /**
      * POST /settings/iot/device/{id}/pins - Lưu GPIO pins
      */
     public function device_pins_save(array $vars): void

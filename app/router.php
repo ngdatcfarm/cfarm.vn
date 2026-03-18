@@ -256,6 +256,7 @@ $r->addRoute('POST', '/settings/iot/firmware/{id:\d+}/toggle', [FirmwareControll
 // Device Type Controller (inline for simplicity)
 $r->addRoute('POST', '/settings/iot/type/store',            [DeviceController::class, 'type_store']);
 $r->addRoute('POST', '/settings/iot/type/{id:\d+}/toggle', [DeviceController::class, 'type_toggle']);
+$r->addRoute('POST', '/settings/iot/type/{id:\d+}/delete', [DeviceController::class, 'type_delete']);
 
 // OTA Endpoints
 $r->addRoute('GET', '/api/firmware/{device_type:\d+}/latest', [FirmwareController::class, 'ota_check']);
