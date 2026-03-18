@@ -164,8 +164,10 @@ class DeviceController
         $stmt = $this->pdo->prepare("DELETE FROM devices WHERE id = ?");
         $stmt->execute([$id]);
         
-        // Redirect back
-        header('Location: /settings/iot?tab=devices');
+        // Return JSON
+        http_response_code(200);
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => true, 'message' => 'Deleted']);
         exit;
     }
 

@@ -330,7 +330,12 @@ function autoGenerate() {
 function deleteDevice(id) {
     if (confirm('Xóa thiết bị này? Tất cả dữ liệu liên quan sẽ bị xóa.')) {
         fetch('/settings/iot/device/' + id + '/delete', { method: 'POST' })
-            .then(() => window.location.reload());
+            .then(response => {
+                window.location.reload();
+            })
+            .catch(err => {
+                alert('Lỗi: ' + err);
+            });
     }
 }
 
