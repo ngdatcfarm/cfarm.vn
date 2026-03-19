@@ -244,6 +244,7 @@ $r->addRoute('GET',  '/iot/curtain/{id:\d+}/status',       [CurtainController::c
 use App\Interfaces\Http\Controllers\Web\IoT\CurtainSetupController;
 $r->addRoute('GET',  '/settings/iot/curtain/setup',        [CurtainSetupController::class, 'setup']);
 $r->addRoute('POST', '/settings/iot/curtain/store',         [CurtainSetupController::class, 'store']);
+$r->addRoute('POST', '/settings/iot/curtain/visual-save',  [CurtainSetupController::class, 'visual_save']);
 $r->addRoute('POST', '/settings/iot/curtain/{id:\d+}/delete', [CurtainSetupController::class, 'delete']);
 
 // Firmware Controller

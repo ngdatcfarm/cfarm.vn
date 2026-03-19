@@ -10,12 +10,12 @@ require_once __DIR__ . '/../../shared/database/mysql.php';
 
 echo "[" . date('Y-m-d H:i:s') . "] Checking device statuses...\n";
 
-// Mark devices as offline if no heartbeat in 2 minutes
+// Mark devices as offline if no heartbeat in 1 minute
 $stmt = $pdo->prepare("
-    UPDATE devices 
-    SET is_online = 0 
-    WHERE is_online = 1 
-    AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE))
+    UPDATE devices
+    SET is_online = 0
+    WHERE is_online = 1
+    AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL 1 MINUTE))
 ");
 $stmt->execute();
 

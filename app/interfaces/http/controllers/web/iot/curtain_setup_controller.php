@@ -20,10 +20,9 @@ class CurtainSetupController
         $saved = $_GET['saved'] ?? null;
         $error = $_GET['error'] ?? null;
 
-        // Lấy barns chưa có curtain
+        // Lấy tất cả barns (đã có curtain vẫn hiển thị để xem/chỉnh sửa)
         $barns = $this->pdo->query("
             SELECT b.* FROM barns b
-            WHERE b.id NOT IN (SELECT DISTINCT barn_id FROM curtain_configs)
             ORDER BY b.number
         ")->fetchAll(PDO::FETCH_OBJ);
 
@@ -122,7 +121,7 @@ class CurtainSetupController
     public function delete(array $vars): void
     {
         $id = (int)$vars['id'];
-        
+
         // Lấy barn_id trước
         $stmt = $this->pdo->prepare("SELECT barn_id FROM curtain_configs WHERE id = ?");
         $stmt->execute([$id]);
@@ -132,6 +131,49 @@ class CurtainSetupController
         $this->pdo->prepare("DELETE FROM curtain_configs WHERE id = ?")->execute([$id]);
 
         header('Location: /settings/iot/curtain/setup?barn_id=' . $barn_id);
+        exit;
+    }
+
+    /**
+     * POST /settings/iot/curtain/visual-save - Lưu cấu hình bạt visual
+     */
+    public function visual_save(array $vars): void
+    {
+        $barn_id = (int)($_POST['barn_id'] ?? 0);
+        $curtains = json_decode($_POST['curtains'] ?? '[]', true);
+
+        if (!$barn_id || empty($curtains)) {
+            header('Location: /settings/iot/curtain/setup?barn_id=' . $barn_id . '&error=invalid_data');
+            exit;
+        }
+
+        // Xóa cấu hình cũ của barn này
+        $this->pdo->prepare("DELETE FROM curtain_configs WHERE barn_id = ?")->execute([$barn_id]);
+
+        // Thêm cấu hình mới
+        $stmt = $this->pdo->prepare("
+            INSERT INTO curtain_configs
+            (name, barn_id, device_id, up_channel_id, down_channel_id, full_up_seconds, full_down_seconds, current_position_pct, moving_state, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'idle', NOW())
+        ");
+
+        foreach ($curtains as $c) {
+            if (empty($c['name']) || empty($c['device_id']) || empty($c['up_channel']) || empty($c['down_channel'])) {
+                continue;
+            }
+
+            $stmt->execute([
+                $c['name'],
+                $barn_id,
+                (int)$c['device_id'],
+                (int)$c['up_channel'],
+                (int)$c['down_channel'],
+                (float)($c['up_seconds'] ?? 30),
+                (float)($c['down_seconds'] ?? 30),
+            ]);
+        }
+
+        header('Location: /settings/iot/curtain/setup?barn_id=' . $barn_id . '&saved=1');
         exit;
     }
 }

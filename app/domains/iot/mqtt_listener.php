@@ -58,21 +58,28 @@ pclose($handle);
 function processLine($pdo, $line) {
     $pos = strpos($line, ' ');
     if ($pos === false) return;
-    
+
     $topic = trim(substr($line, 0, $pos));
     $message = trim(substr($line, $pos + 1));
-    
+
     $parts = explode('/', $topic);
     if (count($parts) < 3) return;
-    
-    // Handle duplicate cfarm/ in topic (e.g., cfarm/cfarm/barn1)
-    $mqttTopic = $parts[0] . '/' . $parts[1];
-    if ($parts[0] === 'cfarm' && $parts[1] === 'cfarm') {
-        $mqttTopic = $parts[0] . '/' . $parts[2];
-    }
-    
+
+    // Extract MQTT topic - handle various formats:
+    // cfarm/barn1/heartbeat -> cfarm/barn1
+    // cfarm/cfarm/barn1/heartbeat -> cfarm/barn1 (duplicate cfarm/)
     $msgType = $parts[count($parts)-1] ?? '';
-    
+
+    // Find base MQTT topic (everything except the last part which is msg type)
+    $baseParts = array_slice($parts, 0, count($parts) - 1);
+
+    // Handle duplicate cfarm/ prefix
+    if (count($baseParts) >= 2 && $baseParts[0] === 'cfarm' && $baseParts[1] === 'cfarm') {
+        $mqttTopic = 'cfarm/' . $baseParts[2];
+    } else {
+        $mqttTopic = implode('/', $baseParts);
+    }
+
     // Find device - SKIP auto-create, only update existing
     $stmt = $pdo->prepare("SELECT id FROM devices WHERE mqtt_topic = ?");
     $stmt->execute([$mqttTopic]);
