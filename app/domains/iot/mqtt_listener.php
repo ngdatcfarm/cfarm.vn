@@ -36,9 +36,16 @@ echo "Listening for messages...\n";
 $lastCleanup = time();
 $lastPingCheck = time();
 $mqttService = new MqttService();
+$running = true;
 
-while (!feof($pipes[1])) {
+while ($running) {
     $line = fgets($pipes[1]);
+
+    if ($line === false) {
+        // No data, sleep and continue
+        usleep(100000);
+        continue;
+    }
 
     if ($line) {
         echo "RX: " . substr($line, 0, 80) . "\n";
