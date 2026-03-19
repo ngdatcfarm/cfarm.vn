@@ -1,176 +1,293 @@
 <?php
 /**
- * MQTT Listener - Full version
- * Receives messages from ESP32 devices
+ * MQTT Listener - Nhận message từ ESP32 devices
+ *
+ * Chạy như daemon, subscribe topic cfarm/# và xử lý:
+ * - heartbeat/status: cập nhật trạng thái online/offline
+ * - LWT (Last Will): đánh dấu device offline khi mất kết nối
+ * - ping response: log phản hồi ping
+ *
+ * Tự động reconnect khi mất kết nối.
+ *
+ * Chạy: php app/domains/iot/mqtt_listener.php
+ * Hoặc: systemctl start cfarm-mqtt-listener
  */
 
+declare(strict_types=1);
+
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
-require_once __DIR__ . '/../../../app/shared/database/mysql.php';
-require_once __DIR__ . '/services/mqtt_service.php';
+require_once __DIR__ . '/../../shared/database/mysql.php';
 
-use App\Domains\IoT\Services\MqttService;
+use PhpMqtt\Client\MqttClient;
+use PhpMqtt\Client\ConnectionSettings;
 
-echo "[" . date('Y-m-d H:i:s') . "] MQTT Listener starting...\n";
+// ============== CONFIG ==============
+const MQTT_HOST           = '103.166.183.215';
+const MQTT_PORT           = 1883;
+const MQTT_USER           = 'cfarm_device';
+const MQTT_PASS           = 'Abc@@123';
+const MQTT_TOPIC          = 'cfarm/#';
+const OFFLINE_TIMEOUT     = 90;   // seconds - đánh dấu offline sau bao lâu không heartbeat
+const CLEANUP_INTERVAL    = 30;   // seconds - kiểm tra cleanup mỗi 30s
+const PING_INTERVAL       = 60;   // seconds - gửi ping mỗi 60s
+const MAX_RECONNECT_DELAY = 60;   // seconds - max delay giữa các lần reconnect
 
-$cmd = '/usr/bin/mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t "cfarm/#" -v --id cfarm_listener_v3 --keepalive 60';
+// ============== MAIN ==============
 
-$desc = [
-    0 => ['pipe', 'r'],
-    1 => ['pipe', 'w'],
-    2 => ['pipe', 'w'],
-];
+$lastCleanup = 0;
+$lastPing    = 0;
 
-$proc = proc_open($cmd, $desc, $pipes);
-
-if (!$proc) {
-    echo "FAIL to start mosquitto_sub\n";
-    exit(1);
+function logMsg(string $msg): void
+{
+    $ts = date('Y-m-d H:i:s');
+    echo "[{$ts}] {$msg}\n";
 }
 
-echo "Listening...\n";
-
-$mqttService = new MqttService();
-$lastCleanup = time();
-$lastPingCheck = time();
-
-while (true) {
-    $line = fgets($pipes[1]);
-
-    if ($line) {
-        $line = trim($line);
-        // Process the message
-        processLine($pdo, $line);
-    }
-
-    // Cleanup every 30 seconds
-    if (time() - $lastCleanup > 30) {
-        $lastCleanup = time();
-        cleanupOffline($pdo);
-    }
-
-    // Send pings every 60 seconds
-    if (time() - $lastPingCheck > 60) {
-        $lastPingCheck = time();
-        sendActivePings($pdo, $mqttService);
-    }
-
-    usleep(100000); // 100ms
-}
-
-proc_close($proc);
-
-// ============== FUNCTIONS ==============
-
-function processLine($pdo, $line) {
-    $pos = strpos($line, ' ');
-    if ($pos === false) return;
-
-    $topic = trim(substr($line, 0, $pos));
-    $message = trim(substr($line, $pos + 1));
-
+/**
+ * Xử lý message nhận từ MQTT
+ */
+function processMessage(PDO $pdo, string $topic, string $message): void
+{
     $parts = explode('/', $topic);
+    // Expect: cfarm/{device_code}/{msg_type}
     if (count($parts) < 3) return;
 
-    $msgType = $parts[count($parts)-1] ?? '';
+    $msgType = end($parts);
+
+    // Xây dựng mqtt_topic = tất cả phần trước msg_type
     $baseParts = array_slice($parts, 0, count($parts) - 1);
+    $mqttTopic = implode('/', $baseParts);
 
-    // Handle duplicate cfarm/
-    if (count($baseParts) >= 2 && $baseParts[0] === 'cfarm' && $baseParts[1] === 'cfarm') {
-        $mqttTopic = 'cfarm/' . $baseParts[2];
-    } else {
-        $mqttTopic = implode('/', $baseParts);
-    }
-
-    // Find device by mqtt_topic
-    $stmt = $pdo->prepare("SELECT id FROM devices WHERE mqtt_topic = ?");
+    // Tìm device theo mqtt_topic
+    $stmt = $pdo->prepare("SELECT id, device_code, name FROM devices WHERE mqtt_topic = ?");
     $stmt->execute([$mqttTopic]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    // Fallback: tìm theo device_code trong payload
     if (!$device) {
-        // Try device_code
         $data = json_decode($message, true);
         if (!empty($data['device'])) {
-            $stmt = $pdo->prepare("SELECT id, mqtt_topic FROM devices WHERE device_code = ?");
+            $stmt = $pdo->prepare("SELECT id, device_code, name, mqtt_topic FROM devices WHERE device_code = ?");
             $stmt->execute([$data['device']]);
             $device = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($device) {
-                $mqttTopic = $device['mqtt_topic'];
-            }
         }
     }
 
-    if (!$device) {
+    if (!$device) return;
+
+    $deviceId = (int)$device['id'];
+
+    switch ($msgType) {
+        case 'heartbeat':
+        case 'status':
+            handleHeartbeat($pdo, $deviceId, $message);
+            break;
+
+        case 'lwt':
+            handleLwt($pdo, $deviceId, $device['name']);
+            break;
+
+        case 'pong':
+            handlePong($pdo, $deviceId);
+            break;
+
+        default:
+            // Log unknown message types for debugging
+            break;
+    }
+}
+
+/**
+ * Xử lý heartbeat/status - device đang online
+ */
+function handleHeartbeat(PDO $pdo, int $deviceId, string $message): void
+{
+    $data = json_decode($message, true);
+    if (!$data) return;
+
+    $status = $data['status'] ?? 'online';
+
+    if ($status === 'offline') {
+        // LWT message qua heartbeat topic
+        $pdo->prepare("UPDATE devices SET is_online = 0 WHERE id = ?")->execute([$deviceId]);
         return;
     }
 
-    $deviceId = $device['id'];
-
-    // Handle message types
-    if ($msgType === 'heartbeat' || $msgType === 'status') {
-        $data = json_decode($message, true);
-        if (!$data) return;
-
-        $status = $data['status'] ?? 'online';
-
-        if ($status === 'offline') {
-            // LWT - device disconnected
-            $pdo->prepare("UPDATE devices SET is_online = 0, ping_fail_count = ping_fail_count + 1 WHERE id = ?")
-                ->execute([$deviceId]);
-        } else {
-            // Heartbeat
-            $pdo->prepare("
-                UPDATE devices SET
-                    is_online = 1,
-                    last_heartbeat_at = NOW(),
-                    wifi_rssi = ?,
-                    ip_address = ?,
-                    uptime_seconds = ?,
-                    free_heap_bytes = ?,
-                    last_ping_response_at = NOW(),
-                    ping_fail_count = 0
-                WHERE id = ?
-            ")->execute([
-                $data['wifi_rssi'] ?? null,
-                $data['ip'] ?? null,
-                $data['uptime'] ?? null,
-                $data['heap'] ?? null,
-                $deviceId
-            ]);
-        }
-    }
+    $pdo->prepare("
+        UPDATE devices SET
+            is_online           = 1,
+            last_heartbeat_at   = NOW(),
+            wifi_rssi           = :rssi,
+            ip_address          = :ip,
+            uptime_seconds      = :uptime,
+            free_heap_bytes     = :heap,
+            ping_fail_count     = 0
+        WHERE id = :id
+    ")->execute([
+        ':rssi'   => $data['wifi_rssi'] ?? $data['rssi'] ?? null,
+        ':ip'     => $data['ip'] ?? null,
+        ':uptime' => $data['uptime'] ?? null,
+        ':heap'   => $data['heap'] ?? $data['free_heap'] ?? null,
+        ':id'     => $deviceId,
+    ]);
 }
 
-function cleanupOffline($pdo) {
-    // Mark offline if no heartbeat for 90 seconds
+/**
+ * Xử lý LWT (Last Will and Testament) - device mất kết nối đột ngột
+ */
+function handleLwt(PDO $pdo, int $deviceId, string $deviceName): void
+{
+    logMsg("LWT received for [{$deviceName}] - marking offline");
+    $pdo->prepare("UPDATE devices SET is_online = 0 WHERE id = ?")->execute([$deviceId]);
+}
+
+/**
+ * Xử lý pong - device phản hồi ping
+ */
+function handlePong(PDO $pdo, int $deviceId): void
+{
+    $pdo->prepare("
+        UPDATE devices SET
+            is_online = 1,
+            last_heartbeat_at = NOW(),
+            ping_fail_count = 0
+        WHERE id = ?
+    ")->execute([$deviceId]);
+}
+
+/**
+ * Đánh dấu devices offline nếu không heartbeat quá OFFLINE_TIMEOUT giây
+ */
+function cleanupOffline(PDO $pdo): void
+{
     $stmt = $pdo->prepare("
         UPDATE devices SET is_online = 0
         WHERE is_online = 1
-        AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL 90 SECOND))
+        AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL :timeout SECOND))
     ");
-    $stmt->execute();
+    $stmt->execute([':timeout' => OFFLINE_TIMEOUT]);
+
+    $count = $stmt->rowCount();
+    if ($count > 0) {
+        logMsg("Marked {$count} device(s) as OFFLINE (no heartbeat > " . OFFLINE_TIMEOUT . "s)");
+    }
 }
 
-function sendActivePings($pdo, $mqttService) {
-    $stmt = $pdo->query("
-        SELECT id, mqtt_topic FROM devices
-        WHERE is_online = 1
-        AND (last_ping_sent_at IS NULL OR last_ping_sent_at < DATE_SUB(NOW(), INTERVAL 60 SECOND))
-    ");
+/**
+ * Gửi ping đến tất cả devices online
+ */
+function sendPings(PDO $pdo, MqttClient $client): void
+{
+    $devices = $pdo->query("
+        SELECT id, mqtt_topic FROM devices WHERE is_online = 1
+    ")->fetchAll(PDO::FETCH_ASSOC);
 
-    while ($device = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $sent = $mqttService->publish($device['mqtt_topic'] . '/cmd', [
-            'action' => 'ping',
-            'ts' => time()
-        ]);
+    foreach ($devices as $device) {
+        try {
+            $payload = json_encode(['action' => 'ping', 'ts' => time()]);
+            $client->publish($device['mqtt_topic'] . '/cmd', $payload, MqttClient::QOS_AT_MOST_ONCE);
+        } catch (Exception $e) {
+            logMsg("Ping failed for {$device['mqtt_topic']}: " . $e->getMessage());
+        }
+    }
 
-        if ($sent) {
-            $pdo->prepare("INSERT INTO device_pings (device_id, status) VALUES (?, 'pending')")
-                ->execute([$device['id']]);
-            $pdo->prepare("UPDATE devices SET last_ping_sent_at = NOW() WHERE id = ?")
-                ->execute([$device['id']]);
+    if (count($devices) > 0) {
+        logMsg("Sent ping to " . count($devices) . " device(s)");
+    }
+}
+
+/**
+ * Main loop với auto-reconnect
+ */
+function run(PDO $pdo): void
+{
+    $reconnectDelay = 1;
+
+    while (true) {
+        try {
+            $clientId = 'cfarm_listener_' . getmypid();
+
+            logMsg("Connecting to MQTT broker " . MQTT_HOST . ":" . MQTT_PORT . " ...");
+
+            $client = new MqttClient(MQTT_HOST, MQTT_PORT, $clientId);
+
+            $settings = (new ConnectionSettings)
+                ->setUsername(MQTT_USER)
+                ->setPassword(MQTT_PASS)
+                ->setKeepAliveInterval(30)
+                ->setConnectTimeout(10)
+                ->setSocketTimeout(5);
+
+            $client->connect($settings);
+
+            logMsg("Connected! Subscribing to " . MQTT_TOPIC);
+
+            $client->subscribe(MQTT_TOPIC, function (string $topic, string $message) use ($pdo) {
+                try {
+                    processMessage($pdo, $topic, $message);
+                } catch (Exception $e) {
+                    logMsg("Error processing [{$topic}]: " . $e->getMessage());
+                }
+            }, MqttClient::QOS_AT_LEAST_ONCE);
+
+            logMsg("Listening for messages...");
+
+            // Reset reconnect delay on successful connect
+            $reconnectDelay = 1;
+
+            global $lastCleanup, $lastPing;
+            $lastCleanup = time();
+            $lastPing    = time();
+
+            // Main loop - loopOnce cho phép ta chạy logic khác giữa các iteration
+            while ($client->isConnected()) {
+                $client->loopOnce(microtime(true), true, 100000); // 100ms sleep
+
+                $now = time();
+
+                // Cleanup offline devices
+                if ($now - $lastCleanup >= CLEANUP_INTERVAL) {
+                    $lastCleanup = $now;
+                    cleanupOffline($pdo);
+                }
+
+                // Send pings
+                if ($now - $lastPing >= PING_INTERVAL) {
+                    $lastPing = $now;
+                    sendPings($pdo, $client);
+                }
+            }
+
+            logMsg("Connection lost, will reconnect...");
+
+        } catch (Exception $e) {
+            logMsg("MQTT Error: " . $e->getMessage());
+        }
+
+        // Reconnect with exponential backoff (max 60s)
+        logMsg("Reconnecting in {$reconnectDelay}s ...");
+        sleep($reconnectDelay);
+        $reconnectDelay = min($reconnectDelay * 2, MAX_RECONNECT_DELAY);
+
+        // Reconnect PDO nếu cần
+        try {
+            $pdo->query("SELECT 1");
+        } catch (Exception $e) {
+            logMsg("DB connection lost, reconnecting...");
+            require __DIR__ . '/../../shared/database/mysql.php';
         }
     }
 }
+
+// ============== START ==============
+logMsg("=== CFarm MQTT Listener starting ===");
+logMsg("PID: " . getmypid());
+logMsg("Broker: " . MQTT_HOST . ":" . MQTT_PORT);
+logMsg("Subscribe: " . MQTT_TOPIC);
+logMsg("Offline timeout: " . OFFLINE_TIMEOUT . "s");
+
+run($pdo);

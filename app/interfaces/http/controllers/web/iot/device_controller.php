@@ -383,6 +383,52 @@ class DeviceController
     }
 
     /**
+     * GET /api/iot/devices/status - Trạng thái tất cả devices (cho polling từ webapp)
+     */
+    public function devices_status(array $vars): void
+    {
+        $devices = $this->pdo->query("
+            SELECT d.id, d.device_code, d.name, d.is_online, d.last_heartbeat_at,
+                   d.wifi_rssi, d.ip_address, d.uptime_seconds, d.free_heap_bytes,
+                   TIMESTAMPDIFF(SECOND, d.last_heartbeat_at, NOW()) as heartbeat_ago,
+                   b.name as barn_name
+            FROM devices d
+            LEFT JOIN barns b ON b.id = d.barn_id
+            ORDER BY d.is_online DESC, b.name, d.name
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->json([
+            'ok'      => true,
+            'devices' => $devices,
+            'ts'      => time(),
+        ]);
+    }
+
+    /**
+     * GET /api/iot/device/{id}/status - Trạng thái 1 device
+     */
+    public function device_status(array $vars): void
+    {
+        $id = (int)$vars['id'];
+
+        $stmt = $this->pdo->prepare("
+            SELECT d.id, d.device_code, d.name, d.is_online, d.last_heartbeat_at,
+                   d.wifi_rssi, d.ip_address, d.uptime_seconds, d.free_heap_bytes,
+                   TIMESTAMPDIFF(SECOND, d.last_heartbeat_at, NOW()) as heartbeat_ago
+            FROM devices d
+            WHERE d.id = ?
+        ");
+        $stmt->execute([$id]);
+        $device = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$device) {
+            $this->json(['ok' => false, 'message' => 'Device not found'], 404);
+        }
+
+        $this->json(['ok' => true] + $device);
+    }
+
+    /**
      * POST /settings/iot/device/{id}/ota - Send OTA command to device
      */
     public function device_ota(array $vars): void

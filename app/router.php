@@ -262,6 +262,10 @@ $r->addRoute('POST', '/settings/iot/type/{id:\d+}/toggle', [DeviceController::cl
 $r->addRoute('POST', '/settings/iot/type/{id:\d+}/update', [DeviceController::class, 'type_update']);
 $r->addRoute('POST', '/settings/iot/type/{id:\d+}/delete', [DeviceController::class, 'type_delete']);
 
+// Device Status API (polling from webapp)
+$r->addRoute('GET', '/api/iot/devices/status',           [DeviceController::class, 'devices_status']);
+$r->addRoute('GET', '/api/iot/device/{id:\d+}/status',   [DeviceController::class, 'device_status']);
+
 // OTA Endpoints
 $r->addRoute('GET', '/api/firmware/{device_type:\d+}/latest', [FirmwareController::class, 'ota_check']);
 $r->addRoute('GET', '/api/firmware/download/{id:\d+}', [FirmwareController::class, 'ota_download']);

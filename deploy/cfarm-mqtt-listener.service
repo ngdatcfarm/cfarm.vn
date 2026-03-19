@@ -1,0 +1,21 @@
+[Unit]
+Description=CFarm MQTT Listener - Nhận message từ ESP32 devices
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/app.cfarm.vn
+ExecStart=/usr/bin/php app/domains/iot/mqtt_listener.php
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/cfarm-mqtt-listener.log
+StandardError=append:/var/log/cfarm-mqtt-listener.log
+
+# Giới hạn tài nguyên
+MemoryMax=128M
+CPUQuota=20%
+
+[Install]
+WantedBy=multi-user.target

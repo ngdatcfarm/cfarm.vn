@@ -2,88 +2,105 @@
 declare(strict_types=1);
 namespace App\Domains\IoT\Services;
 
+use PhpMqtt\Client\MqttClient;
+use PhpMqtt\Client\ConnectionSettings;
 use Exception;
 
 /**
- * MQTT Service - Gửi lệnh đến ESP32 qua MQTT
+ * MQTT Service - Gửi/nhận lệnh ESP32 qua MQTT broker
+ * Sử dụng php-mqtt/client thay vì mosquitto CLI
  */
 class MqttService
 {
-    private string $host;
-    private int $port;
-    private string $user;
-    private string $pass;
+    private string $host = '103.166.183.215';
+    private int    $port = 1883;
+    private string $user = 'cfarm_server';
+    private string $pass = 'Abc@@123';
 
-    public function __construct()
+    private ?MqttClient $client = null;
+
+    /**
+     * Kết nối đến MQTT broker (lazy connect)
+     */
+    private function getClient(): MqttClient
     {
-        $this->host = '103.166.183.215'; // MQTT Broker IP
-        $this->port = 1883;
-        $this->user = 'cfarm_server';
-        $this->pass = 'Abc@@123';
+        if ($this->client !== null && $this->client->isConnected()) {
+            return $this->client;
+        }
+
+        $clientId = 'cfarm_web_' . getmypid() . '_' . mt_rand(1000, 9999);
+
+        $this->client = new MqttClient($this->host, $this->port, $clientId);
+
+        $settings = (new ConnectionSettings)
+            ->setUsername($this->user)
+            ->setPassword($this->pass)
+            ->setKeepAliveInterval(30)
+            ->setConnectTimeout(5)
+            ->setSocketTimeout(5);
+
+        $this->client->connect($settings);
+
+        return $this->client;
     }
 
     /**
-     * Publish message đến MQTT topic
+     * Publish JSON message đến MQTT topic
      */
     public function publish(string $topic, array $payload): bool
     {
-        $message = json_encode($payload);
-        
-        $cmd = sprintf(
-            'mosquitto_pub -h %s -p %d -u %s -P %s -t "%s" -m "%s" -q 1',
-            escapeshellcmd($this->host),
-            $this->port,
-            escapeshellcmd($this->user),
-            escapeshellcmd($this->pass),
-            escapeshellcmd($topic),
-            escapeshellcmd($message)
-        );
-
-        exec($cmd . ' 2>&1', $output, $return);
-        
-        if ($return !== 0) {
-            error_log("MQTT publish failed: " . implode("\n", $output));
+        try {
+            $client = $this->getClient();
+            $message = json_encode($payload, JSON_UNESCAPED_UNICODE);
+            $client->publish($topic, $message, MqttClient::QOS_AT_LEAST_ONCE);
+            return true;
+        } catch (Exception $e) {
+            error_log("[MQTT] Publish failed on {$topic}: " . $e->getMessage());
+            $this->disconnect();
+            return false;
         }
-        
-        return $return === 0;
+    }
+
+    /**
+     * Publish raw string message
+     */
+    public function publishRaw(string $topic, string $message, int $qos = 0, bool $retain = false): bool
+    {
+        try {
+            $client = $this->getClient();
+            $client->publish($topic, $message, $qos, $retain);
+            return true;
+        } catch (Exception $e) {
+            error_log("[MQTT] PublishRaw failed on {$topic}: " . $e->getMessage());
+            $this->disconnect();
+            return false;
+        }
     }
 
     /**
      * Gửi lệnh bật/tắt relay
-     * Format: {"action": "relay", "channel": 1, "state": "on"}
      */
-    public function sendRelayCommand(
-        string $mqttTopic, 
-        int $channel, 
-        string $state
-    ): bool {
-        $payload = [
+    public function sendRelayCommand(string $mqttTopic, int $channel, string $state): bool
+    {
+        return $this->publish($mqttTopic . '/cmd', [
             'action'  => 'relay',
             'channel' => $channel,
-            'state'   => $state, // "on" or "off"
-        ];
-        
-        return $this->publish($mqttTopic . '/cmd', $payload);
+            'state'   => $state,
+        ]);
     }
 
     /**
-     * Gửi lệnh bật relay với thời gian
-     * ESP32 sẽ tự tắt sau duration
+     * Gửi lệnh bật relay + tự tắt sau duration giây
+     * ESP32 firmware sẽ handle auto-off dựa trên duration field
      */
-    public function sendRelayOnWithDuration(
-        string $mqttTopic,
-        int $channel,
-        int $durationSeconds
-    ): bool {
-        // Gửi lệnh ON
-        $sent = $this->sendRelayCommand($mqttTopic, $channel, 'on');
-        
-        // Schedule lệnh OFF sau duration
-        if ($sent && $durationSeconds > 0) {
-            $this->scheduleRelayOff($mqttTopic, $channel, $durationSeconds);
-        }
-        
-        return $sent;
+    public function sendRelayOnWithDuration(string $mqttTopic, int $channel, int $durationSeconds): bool
+    {
+        return $this->publish($mqttTopic . '/cmd', [
+            'action'   => 'relay',
+            'channel'  => $channel,
+            'state'    => 'on',
+            'duration' => $durationSeconds,
+        ]);
     }
 
     /**
@@ -96,44 +113,45 @@ class MqttService
 
     /**
      * Gửi lệnh đến tất cả các kênh
-     * Format: {"action": "all", "state": "on"}
      */
     public function sendAllCommand(string $mqttTopic, string $state): bool
     {
-        $payload = [
+        return $this->publish($mqttTopic . '/cmd', [
             'action' => 'all',
             'state'  => $state,
-        ];
-        
-        return $this->publish($mqttTopic . '/cmd', $payload);
+        ]);
     }
 
     /**
-     * Schedule gửi lệnh OFF sau X giây
+     * Gửi lệnh ping để kiểm tra device
      */
-    private function scheduleRelayOff(string $mqttTopic, int $channel, int $delaySeconds): void
+    public function sendPing(string $mqttTopic): bool
     {
-        $offPayload = json_encode([
-            'action'  => 'relay',
-            'channel' => $channel,
-            'state'   => 'off',
+        return $this->publish($mqttTopic . '/cmd', [
+            'action' => 'ping',
+            'ts'     => time(),
         ]);
-        
-        $topic = $mqttTopic . '/cmd';
-        
-        // Linux - dùng at command hoặc background process với sleep
-        $cmd = sprintf(
-            'mosquitto_pub -h %s -p %d -u %s -P %s -t "%s" -m "%s" -q 1 &',
-            escapeshellcmd($this->host),
-            $this->port,
-            escapeshellcmd($this->user),
-            escapeshellcmd($this->pass),
-            escapeshellcmd($topic),
-            escapeshellcmd($offPayload)
-        );
-        
-        // Chạy background với delay
-        $fullCmd = sprintf('sleep %d && %s', $delaySeconds, $cmd);
-        exec($fullCmd . ' > /dev/null 2>&1 &');
+    }
+
+    /**
+     * Đóng kết nối
+     */
+    public function disconnect(): void
+    {
+        if ($this->client !== null) {
+            try {
+                if ($this->client->isConnected()) {
+                    $this->client->disconnect();
+                }
+            } catch (Exception $e) {
+                // ignore
+            }
+            $this->client = null;
+        }
+    }
+
+    public function __destruct()
+    {
+        $this->disconnect();
     }
 }
