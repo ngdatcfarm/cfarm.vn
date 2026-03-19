@@ -49,6 +49,11 @@ $mqttService = new MqttService();
 while (!feof($handle)) {
     $line = fgets($handle);
 
+    // Debug: show what we got
+    if ($line !== false && $line !== '') {
+        echo "RAW: [" . strlen($line) . " bytes] " . substr($line, 0, 100) . "\n";
+    }
+
     // Process received message
     if ($line) {
         $lastMessage = time();
