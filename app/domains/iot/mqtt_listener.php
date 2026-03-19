@@ -41,10 +41,7 @@ while (true) {
 
     if ($line) {
         $line = trim($line);
-        echo "RX: " . substr($line, 0, 60) . "\n";
-
         // Process the message
-        // echo "RX: " . substr($line, 0, 60) . "\n";
         processLine($pdo, $line);
     }
 
@@ -106,7 +103,6 @@ function processLine($pdo, $line) {
     }
 
     if (!$device) {
-        echo "Device not found: $mqttTopic\n";
         return;
     }
 
@@ -123,7 +119,6 @@ function processLine($pdo, $line) {
             // LWT - device disconnected
             $pdo->prepare("UPDATE devices SET is_online = 0, ping_fail_count = ping_fail_count + 1 WHERE id = ?")
                 ->execute([$deviceId]);
-            echo "Device $deviceId OFFLINE (LWT)\n";
         } else {
             // Heartbeat
             $pdo->prepare("
@@ -144,14 +139,11 @@ function processLine($pdo, $line) {
                 $data['heap'] ?? null,
                 $deviceId
             ]);
-            echo "Device $deviceId heartbeat OK\n";
         }
     }
 }
 
 function cleanupOffline($pdo) {
-    echo "[Cleanup] Checking offline devices...\n";
-
     // Mark offline if no heartbeat for 90 seconds
     $stmt = $pdo->prepare("
         UPDATE devices SET is_online = 0
@@ -159,16 +151,9 @@ function cleanupOffline($pdo) {
         AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL 90 SECOND))
     ");
     $stmt->execute();
-
-    $count = $stmt->rowCount();
-    if ($count > 0) {
-        echo "[Cleanup] Marked $count devices offline\n";
-    }
 }
 
 function sendActivePings($pdo, $mqttService) {
-    echo "[Ping] Sending active pings...\n";
-
     $stmt = $pdo->query("
         SELECT id, mqtt_topic FROM devices
         WHERE is_online = 1
@@ -186,7 +171,6 @@ function sendActivePings($pdo, $mqttService) {
                 ->execute([$device['id']]);
             $pdo->prepare("UPDATE devices SET last_ping_sent_at = NOW() WHERE id = ?")
                 ->execute([$device['id']]);
-            echo "[Ping] Sent to device {$device['id']}\n";
         }
     }
 }
