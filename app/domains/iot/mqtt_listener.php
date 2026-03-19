@@ -24,8 +24,8 @@ if (!$mosquittoPath) {
     exit(1);
 }
 
-// Connect to MQTT broker
-$cmd = "mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t 'cfarm/#' -v --id cfarm_listener_php 2>&1";
+// Connect to MQTT broker - use --keepalive to maintain connection
+$cmd = "mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t 'cfarm/#' -v --id cfarm_listener_php --keepalive 60 2>&1";
 
 echo "Running: $cmd\n";
 
