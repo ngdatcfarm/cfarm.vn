@@ -67,21 +67,18 @@ function processMessage(PDO $pdo, string $topic, string $message): void
     $data = json_decode($message, true);
     $payloadDeviceCode = $data['device'] ?? null;
 
-    // Tìm device theo mqtt_topic
-    $stmt = $pdo->prepare("SELECT id, device_code, name FROM devices WHERE mqtt_topic = ?");
-    $stmt->execute([$mqttTopic]);
-    $device = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    // Nếu tìm theo mqtt_topic → kiểm tra device_code trong payload phải khớp
-    // Tránh trường hợp retained message hoặc device cũ gửi heartbeat cho device mới
-    if ($device && $payloadDeviceCode && $device['device_code'] !== $payloadDeviceCode) {
-        return; // device_code không khớp, bỏ qua
-    }
-
-    // Fallback: tìm theo device_code trong payload
-    if (!$device && $payloadDeviceCode) {
+    // Ưu tiên tìm device theo device_code trong payload (chính xác nhất)
+    $device = null;
+    if ($payloadDeviceCode) {
         $stmt = $pdo->prepare("SELECT id, device_code, name, mqtt_topic FROM devices WHERE device_code = ?");
         $stmt->execute([$payloadDeviceCode]);
+        $device = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    // Fallback: tìm theo mqtt_topic chỉ khi payload không có device_code
+    if (!$device && !$payloadDeviceCode) {
+        $stmt = $pdo->prepare("SELECT id, device_code, name FROM devices WHERE mqtt_topic = ?");
+        $stmt->execute([$mqttTopic]);
         $device = $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
