@@ -83,8 +83,8 @@ class DeviceController
         }
 
         $stmt = $this->pdo->prepare("
-            INSERT INTO devices (device_code, name, barn_id, device_type_id, mqtt_topic, notes, created_at)
-            VALUES (:code, :name, :barn_id, :type_id, :mqtt, :notes, NOW())
+            INSERT INTO devices (device_code, name, barn_id, device_type_id, mqtt_topic, notes, is_online, created_at)
+            VALUES (:code, :name, :barn_id, :type_id, :mqtt, :notes, 0, NOW())
         ");
         $stmt->execute([
             ':code'    => $device_code,
@@ -94,6 +94,12 @@ class DeviceController
             ':mqtt'    => $mqtt_topic,
             ':notes'   => $notes,
         ]);
+
+        // Xóa retained messages trên MQTT broker cho topic này
+        // để tránh listener nhận heartbeat cũ và đánh dấu online
+        $mqtt = new MqttService();
+        $mqtt->publishRaw($mqtt_topic . '/heartbeat', '', 0, true);
+        $mqtt->publishRaw($mqtt_topic . '/pong', '', 0, true);
 
         $device_id = (int)$this->pdo->lastInsertId();
 
