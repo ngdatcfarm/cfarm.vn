@@ -63,19 +63,26 @@ function processMessage(PDO $pdo, string $topic, string $message): void
     $baseParts = array_slice($parts, 0, count($parts) - 1);
     $mqttTopic = implode('/', $baseParts);
 
+    // Parse payload trước để lấy device_code
+    $data = json_decode($message, true);
+    $payloadDeviceCode = $data['device'] ?? null;
+
     // Tìm device theo mqtt_topic
     $stmt = $pdo->prepare("SELECT id, device_code, name FROM devices WHERE mqtt_topic = ?");
     $stmt->execute([$mqttTopic]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    // Nếu tìm theo mqtt_topic → kiểm tra device_code trong payload phải khớp
+    // Tránh trường hợp retained message hoặc device cũ gửi heartbeat cho device mới
+    if ($device && $payloadDeviceCode && $device['device_code'] !== $payloadDeviceCode) {
+        return; // device_code không khớp, bỏ qua
+    }
+
     // Fallback: tìm theo device_code trong payload
-    if (!$device) {
-        $data = json_decode($message, true);
-        if (!empty($data['device'])) {
-            $stmt = $pdo->prepare("SELECT id, device_code, name, mqtt_topic FROM devices WHERE device_code = ?");
-            $stmt->execute([$data['device']]);
-            $device = $stmt->fetch(PDO::FETCH_ASSOC);
-        }
+    if (!$device && $payloadDeviceCode) {
+        $stmt = $pdo->prepare("SELECT id, device_code, name, mqtt_topic FROM devices WHERE device_code = ?");
+        $stmt->execute([$payloadDeviceCode]);
+        $device = $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
     if (!$device) return;

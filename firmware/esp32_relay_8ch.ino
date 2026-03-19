@@ -404,7 +404,7 @@ void sendHeartbeat() {
         relayState[0], relayState[1], relayState[2], relayState[3],
         relayState[4], relayState[5], relayState[6], relayState[7]);
 
-    if (mqtt.publish(topicHeartbeat, buf, true)) {
+    if (mqtt.publish(topicHeartbeat, buf, false)) {
         Serial.println("[Heartbeat] OK");
     }
 }
