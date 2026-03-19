@@ -19,6 +19,9 @@ echo "Loading MqttService...\n";
 require_once __DIR__ . '/services/mqtt_service.php';
 echo "MqttService OK\n";
 
+// Use fully qualified name since it has namespace
+use App\Domains\IoT\Services\MqttService;
+
 echo "[" . date('Y-m-d H:i:s') . "] Starting MQTT Listener...\n";
 
 $cmd = '/usr/bin/mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t "cfarm/#" -v --id cfarm_listener_v3 --keepalive 60';
