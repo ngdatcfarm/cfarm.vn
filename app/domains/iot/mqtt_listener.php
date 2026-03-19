@@ -47,8 +47,13 @@ function processLine($pdo, $line) {
     $parts = explode('/', $topic);
     if (count($parts) < 3) return;
     
+    // Handle duplicate cfarm/ in topic (e.g., cfarm/cfarm/barn1)
     $mqttTopic = $parts[0] . '/' . $parts[1];
-    $msgType = $parts[2] ?? '';
+    if ($parts[0] === 'cfarm' && $parts[1] === 'cfarm') {
+        $mqttTopic = $parts[0] . '/' . $parts[2];
+    }
+    
+    $msgType = $parts[count($parts)-1] ?? '';
     
     // Find device
     $stmt = $pdo->prepare("SELECT id FROM devices WHERE mqtt_topic = ?");
