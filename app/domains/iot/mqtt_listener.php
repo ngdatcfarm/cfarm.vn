@@ -7,22 +7,13 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-echo "Loading autoload...\n";
 require_once __DIR__ . '/../../../vendor/autoload.php';
-echo "Autoload OK\n";
-
-echo "Loading mysql...\n";
 require_once __DIR__ . '/../../../app/shared/database/mysql.php';
-echo "MySQL OK\n";
-
-echo "Loading MqttService...\n";
 require_once __DIR__ . '/services/mqtt_service.php';
-echo "MqttService OK\n";
 
-// Use fully qualified name since it has namespace
 use App\Domains\IoT\Services\MqttService;
 
-echo "[" . date('Y-m-d H:i:s') . "] Starting MQTT Listener...\n";
+echo "[" . date('Y-m-d H:i:s') . "] MQTT Listener starting...\n";
 
 $cmd = '/usr/bin/mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t "cfarm/#" -v --id cfarm_listener_v3 --keepalive 60';
 
@@ -39,7 +30,7 @@ if (!$proc) {
     exit(1);
 }
 
-echo "Listening for messages...\n";
+echo "Listening...\n";
 
 $mqttService = new MqttService();
 $lastCleanup = time();
@@ -53,6 +44,7 @@ while (true) {
         echo "RX: " . substr($line, 0, 60) . "\n";
 
         // Process the message
+        // echo "RX: " . substr($line, 0, 60) . "\n";
         processLine($pdo, $line);
     }
 
