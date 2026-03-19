@@ -163,7 +163,9 @@ ob_start();
                 <?php foreach ($devices as $d): ?>
                 <tr>
                     <td class="px-4 py-3">
-                        <div class="font-semibold"><?= htmlspecialchars($d->name) ?></div>
+                        <div class="font-semibold">
+                            <a href="javascript:void(0)" onclick="showDeviceInfo(<?= $d->id ?>)" class="hover:text-blue-600 hover:underline"><?= htmlspecialchars($d->name) ?></a>
+                        </div>
                         <div class="text-xs text-gray-400 font-mono"><?= htmlspecialchars($d->mqtt_topic) ?></div>
                     </td>
                     <td class="px-4 py-3 text-gray-600"><?= htmlspecialchars($d->barn_name ?? '—') ?></td>
@@ -240,6 +242,11 @@ ob_start();
 
     <?php endif; ?>
 </div>
+
+<style>
+@keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.animate-slide-up { animation: slide-up 0.25s ease-out; }
+</style>
 
 <script>
 // Firmware data - loaded from PHP
@@ -344,6 +351,132 @@ function deleteDevice(id) {
                 alert('Lỗi: ' + err);
             });
     }
+}
+
+// Device info data
+const deviceInfoData = <?php
+$deviceInfoMap = [];
+foreach ($devices as $d) {
+    $deviceInfoMap[$d->id] = [
+        'name' => $d->name,
+        'device_code' => $d->device_code,
+        'mqtt_topic' => $d->mqtt_topic,
+        'is_online' => (bool)$d->is_online,
+        'uptime_seconds' => $d->uptime_seconds ?? null,
+        'last_heartbeat_at' => $d->last_heartbeat_at ?? null,
+        'created_at' => $d->created_at ?? null,
+        'wifi_rssi' => $d->wifi_rssi ?? null,
+        'ip_address' => $d->ip_address ?? null,
+        'type_name' => $d->type_name ?? null,
+        'barn_name' => $d->barn_name ?? null,
+    ];
+}
+echo json_encode($deviceInfoMap);
+?>;
+
+function formatDuration(seconds) {
+    if (!seconds || seconds <= 0) return '—';
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    const parts = [];
+    if (d > 0) parts.push(d + ' ngày');
+    if (h > 0) parts.push(h + ' giờ');
+    if (m > 0) parts.push(m + ' phút');
+    if (parts.length === 0) parts.push(s + ' giây');
+    return parts.join(' ');
+}
+
+function timeAgo(dateStr) {
+    if (!dateStr) return '—';
+    const now = new Date();
+    const then = new Date(dateStr.replace(' ', 'T') + 'Z');
+    const diffMs = now - then;
+    if (diffMs < 0) return 'vừa xong';
+    return formatDuration(Math.floor(diffMs / 1000));
+}
+
+function showDeviceInfo(deviceId) {
+    const d = deviceInfoData[deviceId];
+    if (!d) return;
+
+    // Remove existing modal
+    const old = document.getElementById('deviceInfoModal');
+    if (old) old.remove();
+
+    const statusHtml = d.is_online
+        ? '<span class="inline-flex items-center gap-1 text-green-600 font-medium"><span class="w-2 h-2 bg-green-500 rounded-full inline-block"></span> Online</span>'
+        : '<span class="inline-flex items-center gap-1 text-gray-400"><span class="w-2 h-2 bg-gray-300 rounded-full inline-block"></span> Offline</span>';
+
+    const uptimeHtml = d.is_online && d.uptime_seconds
+        ? formatDuration(d.uptime_seconds)
+        : '—';
+
+    let offlineDuration = '—';
+    if (!d.is_online && d.last_heartbeat_at) {
+        offlineDuration = timeAgo(d.last_heartbeat_at) + ' trước';
+    }
+
+    const lastSeenHtml = d.last_heartbeat_at
+        ? new Date(d.last_heartbeat_at.replace(' ', 'T') + 'Z').toLocaleString('vi-VN')
+        : 'Chưa từng kết nối';
+
+    const modal = document.createElement('div');
+    modal.id = 'deviceInfoModal';
+    modal.className = 'fixed inset-0 z-50 flex items-end justify-center';
+    modal.innerHTML = `
+        <div class="absolute inset-0 bg-black/30" onclick="closeDeviceInfo()"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-t-2xl w-full max-w-lg p-5 pb-8 animate-slide-up">
+            <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="text-base font-bold">${d.name}</h3>
+                    <div class="text-xs text-gray-400 font-mono">${d.device_code}</div>
+                </div>
+                ${statusHtml}
+            </div>
+            <div class="space-y-3">
+                ${d.is_online ? `
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span class="text-sm text-gray-500">⏱️ Uptime</span>
+                    <span class="text-sm font-medium">${uptimeHtml}</span>
+                </div>` : `
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span class="text-sm text-gray-500">😴 Offline từ</span>
+                    <span class="text-sm font-medium">${offlineDuration}</span>
+                </div>`}
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span class="text-sm text-gray-500">📡 Lần cuối online</span>
+                    <span class="text-sm font-medium">${lastSeenHtml}</span>
+                </div>
+                ${d.wifi_rssi ? `
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span class="text-sm text-gray-500">📶 WiFi RSSI</span>
+                    <span class="text-sm font-medium">${d.wifi_rssi} dBm</span>
+                </div>` : ''}
+                ${d.ip_address ? `
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span class="text-sm text-gray-500">🌐 IP</span>
+                    <span class="text-sm font-mono font-medium">${d.ip_address}</span>
+                </div>` : ''}
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span class="text-sm text-gray-500">📌 MQTT Topic</span>
+                    <span class="text-sm font-mono font-medium">${d.mqtt_topic}</span>
+                </div>
+                <div class="flex justify-between items-center py-2">
+                    <span class="text-sm text-gray-500">🏠 Chuồng</span>
+                    <span class="text-sm font-medium">${d.barn_name || '—'}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function closeDeviceInfo() {
+    const modal = document.getElementById('deviceInfoModal');
+    if (modal) modal.remove();
 }
 
 function flashFirmware(deviceId, mqttTopic) {
