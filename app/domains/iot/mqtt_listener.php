@@ -64,31 +64,14 @@ function processLine($pdo, $line) {
     
     $msgType = $parts[count($parts)-1] ?? '';
     
-    // Find device
+    // Find device - SKIP auto-create, only update existing
     $stmt = $pdo->prepare("SELECT id FROM devices WHERE mqtt_topic = ?");
     $stmt->execute([$mqttTopic]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$device) {
-        $data = json_decode($message, true);
-        $deviceCode = $data['device'] ?? basename($mqttTopic);
-        
-        $pdo->prepare("
-            INSERT INTO devices (device_code, name, device_type_id, mqtt_topic, is_online, created_at)
-            VALUES (?, ?, 1, ?, 1, NOW())
-        ")->execute([$deviceCode, $deviceCode, $mqttTopic]);
-        
-        $deviceId = (int)$pdo->lastInsertId();
-        
-        $pins = [32, 33, 25, 26, 27, 14, 12, 13];
-        for ($ch = 1; $ch <= 8; $ch++) {
-            $pdo->prepare("
-                INSERT INTO device_channels (device_id, channel_number, name, channel_type, gpio_pin, is_active)
-                VALUES (?, ?, ?, 'other', ?, 1)
-            ")->execute([$deviceId, $ch, 'Kênh ' . $ch, $pins[$ch-1]]);
-        }
-        
-        echo "Created: $deviceCode\n";
+        echo "Device not found: $mqttTopic\n";
+        return;
     } else {
         $deviceId = $device['id'];
     }
