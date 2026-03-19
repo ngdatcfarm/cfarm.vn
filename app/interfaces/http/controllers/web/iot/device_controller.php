@@ -82,6 +82,14 @@ class DeviceController
             exit;
         }
 
+        // Kiểm tra trùng device_code
+        $exists = $this->pdo->prepare("SELECT id FROM devices WHERE device_code = ?");
+        $exists->execute([$device_code]);
+        if ($exists->fetch()) {
+            header('Location: /settings/iot?error=duplicate_code');
+            exit;
+        }
+
         // Xóa retained messages trên MQTT broker TRƯỚC khi tạo device
         // để tránh race condition: listener nhận retained heartbeat ngay sau INSERT
         $this->mqtt->publishRaw($mqtt_topic . '/heartbeat', '', 0, true);

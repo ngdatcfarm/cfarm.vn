@@ -50,7 +50,14 @@ ob_start();
 
     <?php if (isset($_GET['error'])): ?>
     <div class="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
-        <?= $_GET['error'] === 'missing_fields' ? '❌ Vui lòng điền đầy đủ thông tin' : '❌ Lỗi' ?>
+        <?php
+            $errMsg = match($_GET['error']) {
+                'missing_fields' => '❌ Vui lòng điền đầy đủ thông tin',
+                'duplicate_code' => '❌ Mã thiết bị đã tồn tại, vui lòng chọn mã khác',
+                default => '❌ Lỗi',
+            };
+            echo $errMsg;
+        ?>
     </div>
     <?php endif; ?>
 
