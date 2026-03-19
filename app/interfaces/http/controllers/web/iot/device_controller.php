@@ -90,11 +90,6 @@ class DeviceController
             exit;
         }
 
-        // Xóa retained messages trên MQTT broker TRƯỚC khi tạo device
-        // để tránh race condition: listener nhận retained heartbeat ngay sau INSERT
-        $this->mqtt->publishRaw($mqtt_topic . '/heartbeat', '', 0, true);
-        $this->mqtt->publishRaw($mqtt_topic . '/pong', '', 0, true);
-
         $stmt = $this->pdo->prepare("
             INSERT INTO devices (device_code, name, barn_id, device_type_id, mqtt_topic, notes, is_online, created_at)
             VALUES (:code, :name, :barn_id, :type_id, :mqtt, :notes, 0, NOW())
