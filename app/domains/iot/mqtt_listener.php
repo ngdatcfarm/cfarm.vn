@@ -5,8 +5,8 @@
  */
 
 // Load dependencies
-require_once __DIR__ . '/../../vendor/autoload.php';
-require_once __DIR__ . '/../../shared/database/mysql.php';
+require_once __DIR__ . '/../../../vendor/autoload.php';
+require_once __DIR__ . '/../../../app/shared/database/mysql.php';
 require_once __DIR__ . '/services/mqtt_service.php';
 
 // Force output immediately
