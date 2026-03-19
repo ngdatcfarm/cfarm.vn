@@ -43,8 +43,8 @@ if (!is_resource($process)) {
     exit(1);
 }
 
-// Non-blocking mode
-stream_set_blocking($pipes[1], false);
+// Use blocking mode
+stream_set_blocking($pipes[1], true);
 
 echo "mosquitto_sub started, waiting for messages...\n";
 
