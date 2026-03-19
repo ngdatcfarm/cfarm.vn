@@ -5,9 +5,9 @@
  */
 
 // Load dependencies
-require_once __DIR__ . '/../../../vendor/autoload.php';
-require_once __DIR__ . '/../../../app/shared/database/mysql.php';
-require_once __DIR__ . '/../domains/iot/services/mqtt_service.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../../shared/database/mysql.php';
+require_once __DIR__ . '/services/mqtt_service.php';
 
 echo "[" . date('Y-m-d H:i:s') . "] Starting MQTT Listener...\n";
 
