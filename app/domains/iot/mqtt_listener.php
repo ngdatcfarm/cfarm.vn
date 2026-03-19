@@ -23,11 +23,15 @@ echo "Listening...\n";
 
 stream_set_blocking($handle, false);
 
+$lastMessage = time();
 $lastCleanup = time();
 
 while (!feof($handle)) {
     $line = fgets($handle);
+    
+    // Check if we got a line (message)
     if ($line) {
+        $lastMessage = time();
         $line = trim($line);
         if ($line && strpos($line, 'cfarm/') === 0) {
             echo "RX: $line\n";
@@ -35,13 +39,18 @@ while (!feof($handle)) {
         }
     }
     
-    // Cleanup every 60 seconds
-    if (time() - $lastCleanup > 60) {
+    // Cleanup every 30 seconds
+    if (time() - $lastCleanup > 30) {
         $lastCleanup = time();
         cleanupOffline($pdo);
     }
     
-    usleep(100000);
+    // If no messages for 5 minutes, just sleep a bit
+    if (time() - $lastMessage > 300) {
+        sleep(5);
+    }
+    
+    usleep(100000); // 100ms
 }
 
 pclose($handle);
@@ -103,12 +112,12 @@ function processLine($pdo, $line) {
 }
 
 function cleanupOffline($pdo) {
-    // Mark devices as offline if no heartbeat in 2 minutes
+    // Mark devices as offline if no heartbeat in 60 seconds
     $stmt = $pdo->prepare("
         UPDATE devices 
         SET is_online = 0 
         WHERE is_online = 1 
-        AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE))
+        AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL 1 MINUTE))
     ");
     $stmt->execute();
     
