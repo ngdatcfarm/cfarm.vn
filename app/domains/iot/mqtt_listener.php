@@ -15,17 +15,28 @@ ob_end_flush();
 
 echo "[" . date('Y-m-d H:i:s') . "] Starting MQTT Listener...\n";
 
-// Connect to MQTT broker
-$cmd = "mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t 'cfarm/#' -v --id cfarm_listener_php";
+// Check if mosquitto_sub exists
+$mosquittoPath = trim(shell_exec('which mosquitto_sub'));
+echo "Mosquitto path: " . $mosquittoPath . "\n";
 
-$handle = popen($cmd . " 2>&1", 'r');
+if (!$mosquittoPath) {
+    echo "ERROR: mosquitto_sub not found\n";
+    exit(1);
+}
+
+// Connect to MQTT broker
+$cmd = "mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t 'cfarm/#' -v --id cfarm_listener_php 2>&1";
+
+echo "Running: $cmd\n";
+
+$handle = popen($cmd, 'r');
 
 if (!$handle) {
     echo "Failed to start mosquitto_sub\n";
     exit(1);
 }
 
-echo "Listening for MQTT messages...\n";
+echo "mosquitto_sub started, waiting for messages...\n";
 
 stream_set_blocking($handle, false);
 
