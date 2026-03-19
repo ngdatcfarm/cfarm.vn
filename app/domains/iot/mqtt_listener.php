@@ -29,25 +29,32 @@ $cmd = "mosquitto_sub -h 103.166.183.215 -u cfarm_device -P Abc@@123 -t 'cfarm/#
 
 echo "Running: $cmd\n";
 
-$handle = popen($cmd, 'r');
+// Use proc_open for better control
+$descriptors = [
+    0 => ["pipe", "r"],  // stdin
+    1 => ["pipe", "w"],  // stdout
+    2 => ["pipe", "w"],  // stderr
+];
 
-if (!$handle) {
+$process = proc_open($cmd, $descriptors, $pipes);
+
+if (!is_resource($process)) {
     echo "Failed to start mosquitto_sub\n";
     exit(1);
 }
 
-echo "mosquitto_sub started, waiting for messages...\n";
+// Non-blocking mode
+stream_set_blocking($pipes[1], false);
 
-// Test with blocking mode first
-stream_set_blocking($handle, true);
+echo "mosquitto_sub started, waiting for messages...\n";
 
 $lastMessage = time();
 $lastCleanup = time();
 $lastPingCheck = time();
 $mqttService = new MqttService();
 
-while (!feof($handle)) {
-    $line = fgets($handle);
+while (!feof($pipes[1])) {
+    $line = fgets($pipes[1]);
 
     // Debug: show what we got
     if ($line !== false && $line !== '') {
@@ -87,7 +94,7 @@ while (!feof($handle)) {
     usleep(100000); // 100ms
 }
 
-pclose($handle);
+proc_close($process);
 
 /**
  * Process incoming MQTT message
