@@ -9,6 +9,10 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../../shared/database/mysql.php';
 require_once __DIR__ . '/services/mqtt_service.php';
 
+// Force output immediately
+ob_implicit_flush(true);
+ob_end_flush();
+
 echo "[" . date('Y-m-d H:i:s') . "] Starting MQTT Listener...\n";
 
 // Connect to MQTT broker
