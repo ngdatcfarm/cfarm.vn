@@ -391,7 +391,7 @@ function formatDuration(seconds) {
 function timeAgo(dateStr) {
     if (!dateStr) return '—';
     const now = new Date();
-    const then = new Date(dateStr.replace(' ', 'T') + 'Z');
+    const then = new Date(dateStr.replace(' ', 'T') + '+07:00');
     const diffMs = now - then;
     if (diffMs < 0) return 'vừa xong';
     return formatDuration(Math.floor(diffMs / 1000));
@@ -419,7 +419,7 @@ function showDeviceInfo(deviceId) {
     }
 
     const lastSeenHtml = d.last_heartbeat_at
-        ? new Date(d.last_heartbeat_at.replace(' ', 'T') + 'Z').toLocaleString('vi-VN')
+        ? new Date(d.last_heartbeat_at.replace(' ', 'T') + '+07:00').toLocaleString('vi-VN', {timeZone: 'Asia/Ho_Chi_Minh'})
         : 'Chưa từng kết nối';
 
     const modal = document.createElement('div');
