@@ -23,6 +23,8 @@ echo "Listening...\n";
 
 stream_set_blocking($handle, false);
 
+$lastCleanup = time();
+
 while (!feof($handle)) {
     $line = fgets($handle);
     if ($line) {
@@ -32,6 +34,13 @@ while (!feof($handle)) {
             processLine($pdo, $line);
         }
     }
+    
+    // Cleanup every 60 seconds
+    if (time() - $lastCleanup > 60) {
+        $lastCleanup = time();
+        cleanupOffline($pdo);
+    }
+    
     usleep(100000);
 }
 
@@ -107,5 +116,21 @@ function processLine($pdo, $line) {
         ]);
         
         echo "Updated device $deviceId\n";
+    }
+}
+
+function cleanupOffline($pdo) {
+    // Mark devices as offline if no heartbeat in 2 minutes
+    $stmt = $pdo->prepare("
+        UPDATE devices 
+        SET is_online = 0 
+        WHERE is_online = 1 
+        AND (last_heartbeat_at IS NULL OR last_heartbeat_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE))
+    ");
+    $stmt->execute();
+    
+    $count = $stmt->rowCount();
+    if ($count > 0) {
+        echo "Cleaned up $count offline devices\n";
     }
 }
