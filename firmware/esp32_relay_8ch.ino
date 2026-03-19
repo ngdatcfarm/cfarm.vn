@@ -23,6 +23,8 @@
 #include <esp_task_wdt.h>
 #include <Preferences.h>
 #include <ArduinoOTA.h>
+#include <HTTPClient.h>
+#include <Update.h>
 
 // ======================== CAU HINH ========================
 
@@ -209,6 +211,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         handleAllCmd(doc);
     } else if (strcmp(action, "ping") == 0) {
         handlePing(doc);
+    } else if (strcmp(action, "ota") == 0) {
+        handleOtaCmd(doc);
     }
 }
 
@@ -259,6 +263,80 @@ void handlePing(const JsonDocument& doc) {
 
     mqtt.publish(topicPong, buf);
     Serial.println("[Pong] Sent");
+}
+
+// ======================== HTTP OTA ========================
+
+void handleOtaCmd(const JsonDocument& doc) {
+    const char* url = doc["url"] | "";
+    const char* version = doc["version"] | "unknown";
+
+    if (strlen(url) == 0) {
+        Serial.println("[OTA] URL rong, bo qua");
+        return;
+    }
+
+    Serial.printf("[OTA] Bat dau cap nhat v%s tu: %s\n", version, url);
+
+    // Tat het relay truoc khi OTA
+    for (int i = 0; i < 8; i++) {
+        digitalWrite(RELAY_PINS[i], HIGH);
+        relayOffAt[i] = 0;
+    }
+
+    // Thong bao server dang cap nhat
+    char buf[192];
+    snprintf(buf, sizeof(buf),
+        "{\"device\":\"%s\",\"status\":\"updating\",\"version\":\"%s\"}",
+        DEVICE_CODE, version);
+    mqtt.publish(topicState, buf);
+
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, url);
+    http.setTimeout(30000);
+
+    int httpCode = http.GET();
+    if (httpCode != 200) {
+        Serial.printf("[OTA] HTTP loi: %d\n", httpCode);
+        http.end();
+        return;
+    }
+
+    int contentLength = http.getSize();
+    if (contentLength <= 0) {
+        Serial.println("[OTA] Content-Length khong hop le");
+        http.end();
+        return;
+    }
+
+    if (!Update.begin(contentLength)) {
+        Serial.printf("[OTA] Khong du bo nho: %d bytes\n", contentLength);
+        http.end();
+        return;
+    }
+
+    // Tang WDT timeout cho OTA (120s)
+    esp_task_wdt_reset();
+
+    WiFiClient* stream = http.getStreamPtr();
+    size_t written = Update.writeStream(*stream);
+    http.end();
+
+    if (written != contentLength) {
+        Serial.printf("[OTA] Ghi thieu: %d/%d bytes\n", written, contentLength);
+        Update.abort();
+        return;
+    }
+
+    if (!Update.end(true)) {
+        Serial.printf("[OTA] Loi ket thuc: %s\n", Update.errorString());
+        return;
+    }
+
+    Serial.println("[OTA] Hoan tat! Khoi dong lai...");
+    delay(500);
+    ESP.restart();
 }
 
 // ======================== SET RELAY ========================

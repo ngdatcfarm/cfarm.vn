@@ -28,12 +28,13 @@ use PhpMqtt\Client\ConnectionSettings;
 // ============== CONFIG ==============
 const MQTT_HOST           = '103.166.183.215';
 const MQTT_PORT           = 1883;
-const MQTT_USER           = 'cfarm_device';
+const MQTT_USER           = 'cfarm_server';
 const MQTT_PASS           = 'Abc@@123';
 const MQTT_TOPIC          = 'cfarm/#';
 const OFFLINE_TIMEOUT     = 90;   // seconds - đánh dấu offline sau bao lâu không heartbeat
 const CLEANUP_INTERVAL    = 30;   // seconds - kiểm tra cleanup mỗi 30s
 const PING_INTERVAL       = 60;   // seconds - gửi ping mỗi 60s
+const PING_TIMEOUT        = 30;   // seconds - nếu ping không pong sau 30s → tăng fail count
 const MAX_RECONNECT_DELAY = 60;   // seconds - max delay giữa các lần reconnect
 
 // ============== MAIN ==============
@@ -161,9 +162,20 @@ function handlePong(PDO $pdo, int $deviceId): void
 
 /**
  * Đánh dấu devices offline nếu không heartbeat quá OFFLINE_TIMEOUT giây
+ * Tăng ping_fail_count cho devices online mà chưa đến mức offline
  */
 function cleanupOffline(PDO $pdo): void
 {
+    // Tăng ping_fail_count cho devices online nhưng heartbeat cũ hơn PING_TIMEOUT
+    $pdo->prepare("
+        UPDATE devices SET ping_fail_count = ping_fail_count + 1
+        WHERE is_online = 1
+        AND last_heartbeat_at IS NOT NULL
+        AND last_heartbeat_at < DATE_SUB(NOW(), INTERVAL :timeout SECOND)
+        AND last_heartbeat_at >= DATE_SUB(NOW(), INTERVAL :offline SECOND)
+    ")->execute([':timeout' => PING_TIMEOUT, ':offline' => OFFLINE_TIMEOUT]);
+
+    // Đánh dấu offline nếu quá OFFLINE_TIMEOUT
     $stmt = $pdo->prepare("
         UPDATE devices SET is_online = 0
         WHERE is_online = 1

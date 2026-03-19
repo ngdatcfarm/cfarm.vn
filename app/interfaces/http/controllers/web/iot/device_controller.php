@@ -460,7 +460,7 @@ class DeviceController
         // Send OTA command via MQTT
         // The ESP32 needs to have OTA capability built-in
         // For now, we just send a notification and provide the download URL
-        $otaUrl = '/api/firmware/download/' . $firmware['id'];
+        $otaUrl = 'http://app.cfarm.vn/api/firmware/download/' . $firmware['id'];
         
         $payload = [
             'action' => 'ota',
