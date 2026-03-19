@@ -38,7 +38,8 @@ if (!$handle) {
 
 echo "mosquitto_sub started, waiting for messages...\n";
 
-stream_set_blocking($handle, false);
+// Test with blocking mode first
+stream_set_blocking($handle, true);
 
 $lastMessage = time();
 $lastCleanup = time();
