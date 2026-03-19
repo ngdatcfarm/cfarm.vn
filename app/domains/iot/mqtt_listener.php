@@ -37,8 +37,15 @@ $lastCleanup = time();
 $lastPingCheck = time();
 $mqttService = new MqttService();
 $running = true;
+$loopCount = 0;
 
 while ($running) {
+    $loopCount++;
+
+    if ($loopCount % 5 == 0) {
+        echo "Loop $loopCount\n";
+    }
+
     $line = fgets($pipes[1]);
 
     if ($line === false) {
