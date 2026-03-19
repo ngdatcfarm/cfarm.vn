@@ -7,9 +7,17 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+echo "Loading autoload...\n";
 require_once __DIR__ . '/../../../vendor/autoload.php';
+echo "Autoload OK\n";
+
+echo "Loading mysql...\n";
 require_once __DIR__ . '/../../../app/shared/database/mysql.php';
+echo "MySQL OK\n";
+
+echo "Loading MqttService...\n";
 require_once __DIR__ . '/services/mqtt_service.php';
+echo "MqttService OK\n";
 
 echo "[" . date('Y-m-d H:i:s') . "] Starting MQTT Listener...\n";
 
