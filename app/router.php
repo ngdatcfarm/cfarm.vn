@@ -27,6 +27,7 @@ $r->addRoute('GET',  '/push/vapid-public-key', [PushController::class, 'vapid_ke
 $r->addRoute('POST', '/push/subscribe',        [PushController::class, 'subscribe']);
 $r->addRoute('POST', '/push/unsubscribe',      [PushController::class, 'unsubscribe']);
 $r->addRoute('POST', '/push/test',            [PushController::class, 'test_push']);
+$r->addRoute('POST', '/push/acknowledge',     [PushController::class, 'acknowledge']);
 
 $r->addRoute('GET',  '/settings/notifications',        [SettingsController::class, 'notifications']);
 $r->addRoute('POST', '/settings/notifications/update',  [SettingsController::class, 'notifications_update']);

@@ -55,6 +55,28 @@ class PushController
             ->execute([':e' => $body['endpoint']]);
         $this->json(true, 'Đã hủy đăng ký');
     }
+    // POST /push/acknowledge
+    public function acknowledge(array $vars): void
+    {
+        $body = json_decode(file_get_contents('php://input'), true);
+        $type = $body['type'] ?? null;
+
+        if (!$type) {
+            $this->json(false, 'Thiếu type');
+            return;
+        }
+
+        // Acknowledge tất cả notifications chưa ack của type này
+        $stmt = $this->pdo->prepare("
+            UPDATE push_notifications_log
+            SET acknowledged_at = NOW()
+            WHERE type = :type AND acknowledged_at IS NULL
+        ");
+        $stmt->execute([':type' => $type]);
+
+        $this->json(true, 'Đã xác nhận', ['updated' => $stmt->rowCount()]);
+    }
+
     // POST /push/test
     public function test_push(array $vars): void
     {

@@ -1,4 +1,4 @@
-const CACHE = 'cfarm-v2';
+const CACHE = 'cfarm-v3';
 const OFFLINE_URLS = ['/'];
 
 self.addEventListener('install', e => {
@@ -38,23 +38,48 @@ self.addEventListener('fetch', e => {
 // Push notification handler
 self.addEventListener('push', e => {
     const data = e.data ? e.data.json() : {};
+    const options = {
+        body:  data.body  || '',
+        icon:  data.icon  || '/icons/icon-192.png',
+        badge: data.badge || '/icons/icon-192.png',
+        data:  { url: data.url || '/', type: data.type || '' },
+        vibrate: [200, 100, 200],
+    };
+
+    // Thêm action "Đã biết" cho DEVICE_OFFLINE để dừng lặp thông báo
+    if (data.type === 'DEVICE_OFFLINE') {
+        options.actions = [
+            { action: 'acknowledge', title: 'Đã biết' }
+        ];
+        options.requireInteraction = true; // Giữ notification cho đến khi user tương tác
+    }
+
     e.waitUntil(
-        self.registration.showNotification(data.title || 'CFarm', {
-            body:  data.body  || '',
-            icon:  data.icon  || '/icons/icon-192.png',
-            badge: data.badge || '/icons/icon-192.png',
-            data:  { url: data.url || '/' },
-            vibrate: [200, 100, 200],
-        })
+        self.registration.showNotification(data.title || 'CFarm', options)
     );
 });
 
-// Click notification → mở URL
+// Click notification → mở URL hoặc xử lý action
 self.addEventListener('notificationclick', e => {
     e.notification.close();
+    const data = e.notification.data || {};
+
+    // Action "Đã biết" → gọi API acknowledge, không mở URL
+    if (e.action === 'acknowledge' && data.type) {
+        e.waitUntil(
+            fetch('/push/acknowledge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: data.type }),
+            })
+        );
+        return;
+    }
+
+    // Click bình thường → mở URL
     e.waitUntil(
         clients.matchAll({ type: 'window' }).then(list => {
-            const url = e.notification.data?.url || '/';
+            const url = data.url || '/';
             for (const client of list) {
                 if (client.url === url && 'focus' in client) return client.focus();
             }
