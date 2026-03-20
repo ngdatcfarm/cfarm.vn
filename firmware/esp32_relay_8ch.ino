@@ -196,14 +196,22 @@ void mqttReconnect() {
 // ======================== MQTT CALLBACK ========================
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
+    // Log raw payload nhan duoc
+    char raw[257];
+    int copyLen = (length < sizeof(raw) - 1) ? length : sizeof(raw) - 1;
+    memcpy(raw, payload, copyLen);
+    raw[copyLen] = '\0';
+    Serial.printf("[CMD] <<< Nhan lenh: %s\n", raw);
+
     StaticJsonDocument<256> doc;
     DeserializationError err = deserializeJson(doc, payload, length);
     if (err) {
-        Serial.printf("[MQTT] JSON parse loi: %s\n", err.c_str());
+        Serial.printf("[CMD] !!! JSON parse loi: %s\n", err.c_str());
         return;
     }
 
     const char* action = doc["action"] | "";
+    Serial.printf("[CMD] Action: \"%s\"\n", action);
 
     if (strcmp(action, "relay") == 0) {
         handleRelayCmd(doc);
@@ -213,6 +221,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         handlePing(doc);
     } else if (strcmp(action, "ota") == 0) {
         handleOtaCmd(doc);
+    } else {
+        Serial.printf("[CMD] !!! Action khong ho tro: \"%s\"\n", action);
     }
 }
 
@@ -223,33 +233,49 @@ void handleRelayCmd(const JsonDocument& doc) {
     const char* st = doc["state"] | "";
     int duration = doc["duration"] | 0;  // seconds, 0 = khong timer
 
-    if (ch < 1 || ch > 8) return;
+    if (ch < 1 || ch > 8) {
+        Serial.printf("[CMD] !!! Channel %d khong hop le (1-8)\n", ch);
+        return;
+    }
 
     int idx = ch - 1;
     bool on = (strcmp(st, "on") == 0);
+
+    Serial.printf("[CMD] >>> Relay CH%d -> %s", ch, on ? "BAT" : "TAT");
+    if (on && duration > 0) {
+        Serial.printf(" (tu tat sau %ds)", duration);
+    }
+    Serial.println();
 
     setRelay(idx, on);
 
     // Duration auto-off: bat relay + tu tat sau X giay
     if (on && duration > 0) {
         relayOffAt[idx] = millis() + ((unsigned long)duration * 1000UL);
-        Serial.printf("[Timer] CH%d auto-off sau %ds\n", ch, duration);
+        Serial.printf("[CMD] OK: CH%d DA BAT, auto-off sau %ds\n", ch, duration);
     } else {
         relayOffAt[idx] = 0;  // xoa timer neu tat thu cong
+        Serial.printf("[CMD] OK: CH%d DA %s\n", ch, on ? "BAT" : "TAT");
     }
 }
 
 void handleAllCmd(const JsonDocument& doc) {
     const char* st = doc["state"] | "";
     bool on = (strcmp(st, "on") == 0);
+    Serial.printf("[CMD] >>> TAT CA relay -> %s\n", on ? "BAT" : "TAT");
     for (int i = 0; i < 8; i++) {
         setRelay(i, on);
         relayOffAt[i] = 0;  // xoa tat ca timer
     }
+    Serial.printf("[CMD] OK: Tat ca 8 relay da %s\n", on ? "BAT" : "TAT");
 }
 
 void handlePing(const JsonDocument& doc) {
-    if (!mqtt.connected()) return;
+    Serial.println("[CMD] >>> Nhan PING tu server");
+    if (!mqtt.connected()) {
+        Serial.println("[CMD] !!! MQTT khong ket noi, khong gui duoc PONG");
+        return;
+    }
 
     unsigned long ts = doc["ts"] | 0;
     char buf[192];
@@ -262,7 +288,7 @@ void handlePing(const JsonDocument& doc) {
         WiFi.RSSI());
 
     mqtt.publish(topicPong, buf);
-    Serial.println("[Pong] Sent");
+    Serial.println("[CMD] OK: Da gui PONG");
 }
 
 // ======================== HTTP OTA ========================
@@ -351,12 +377,14 @@ void setRelay(int ch, bool on) {
             int down = INTERLOCK[i][1] - 1;
 
             if (ch == up && relayState[down]) {
+                Serial.printf("[Interlock] Tat CH%d truoc khi bat CH%d\n", down + 1, ch + 1);
                 applyRelay(down, false);
                 relayOffAt[down] = 0;  // xoa timer kenh doi nghich
                 delay(INTERLOCK_DEAD_TIME_MS);
                 break;
             }
             if (ch == down && relayState[up]) {
+                Serial.printf("[Interlock] Tat CH%d truoc khi bat CH%d\n", up + 1, ch + 1);
                 applyRelay(up, false);
                 relayOffAt[up] = 0;
                 delay(INTERLOCK_DEAD_TIME_MS);
@@ -369,10 +397,14 @@ void setRelay(int ch, bool on) {
 }
 
 void applyRelay(int ch, bool on) {
-    if (relayState[ch] == on) return;
+    if (relayState[ch] == on) {
+        Serial.printf("[Relay] CH%d da o trang thai %s, bo qua\n", ch + 1, on ? "ON" : "OFF");
+        return;
+    }
 
     digitalWrite(RELAY_PINS[ch], on ? LOW : HIGH);
     relayState[ch] = on;
+    Serial.printf("[Relay] CH%d -> %s (GPIO%d = %s)\n", ch + 1, on ? "ON" : "OFF", RELAY_PINS[ch], on ? "LOW" : "HIGH");
     saveRelayStates();
 
     // Publish state change
