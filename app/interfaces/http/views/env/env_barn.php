@@ -52,6 +52,32 @@ $avg_nh3_fcr   = json_encode(array_column($env_fcr, 'avg_nh3'));
 </div>
 
 <?php if ($device): ?>
+<!-- Sensor selector tabs (chỉ hiện khi > 1 sensor) -->
+<?php if (count($devices) > 1): ?>
+<div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 mb-4">
+    <div class="text-xs text-gray-400 mb-2">Chọn sensor</div>
+    <div class="flex flex-wrap gap-2">
+        <a href="?sensor=all"
+           class="px-3 py-1.5 rounded-xl text-xs font-medium transition-colors
+                  <?= $selected_sensor === 'all'
+                      ? 'bg-teal-500 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200' ?>">
+            Tất cả (TB)
+        </a>
+        <?php foreach ($devices as $dv): ?>
+        <a href="?sensor=<?= $dv['id'] ?>"
+           class="px-3 py-1.5 rounded-xl text-xs font-medium transition-colors
+                  <?= $selected_sensor === (int)$dv['id']
+                      ? 'bg-teal-500 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200' ?>">
+            <?= htmlspecialchars($dv['name'] ?: 'Sensor #'.$dv['id']) ?>
+            <?php if ($dv['is_online']): ?><span class="ml-1 w-1.5 h-1.5 rounded-full bg-green-400 inline-block"></span><?php endif; ?>
+        </a>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Interval config -->
 <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-4">
     <div class="flex items-center justify-between">
