@@ -111,10 +111,12 @@ $r->addRoute('POST', '/barns/{id:\d+}/delete', [BarnController::class, 'destroy'
 // $r->addRoute('POST', '/feed-programs',             [feed_program_controller::class, 'store']);
 
 // ------------------------------------------------------------------
-// ENV — chỉ có ingest API, không có web view
-// (sẽ mở khoá theo từng vertical slice)
+// ENV — môi trường chuồng nuôi
 // ------------------------------------------------------------------
-// $r->addRoute('POST', '/api/env/ingest', [env_ingest_controller::class, 'ingest']);
+$r->addRoute('GET',  '/env',                      [EnvController::class, 'index']);
+$r->addRoute('GET',  '/env/barn/{id:\d+}',        [EnvController::class, 'barn_show']);
+$r->addRoute('POST', '/env/barn/{id:\d+}/interval',[EnvController::class, 'update_interval']);
+$r->addRoute('GET',  '/env/api/barn/{id:\d+}',    [EnvController::class, 'api_latest']);
 // ------------------------------------------------------------------
 // CYCLE
 // ------------------------------------------------------------------

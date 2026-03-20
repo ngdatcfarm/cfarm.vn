@@ -151,6 +151,79 @@ class EnvController
         $weather->execute([':bid' => $barn_id]);
         $weather = $weather->fetch(PDO::FETCH_ASSOC) ?: null;
 
+        // 7 ngày: thống kê ngày (min, max, avg) cho biểu đồ xu hướng
+        $daily_7d = [];
+        if ($device) {
+            $daily_7d = $this->pdo->prepare("
+                SELECT
+                    DATE(recorded_at) as date_label,
+                    DATE_FORMAT(recorded_at, '%d/%m') as short_date,
+                    AVG(temperature) as avg_temp,  MIN(temperature) as min_temp,  MAX(temperature) as max_temp,
+                    AVG(humidity)    as avg_hum,    MIN(humidity)    as min_hum,   MAX(humidity)    as max_hum,
+                    AVG(nh3_ppm)     as avg_nh3,    MAX(nh3_ppm)     as max_nh3,
+                    AVG(co2_ppm)     as avg_co2,    MAX(co2_ppm)     as max_co2,
+                    AVG(light_lux)   as avg_lux,
+                    COUNT(*)         as reading_count
+                FROM env_readings
+                WHERE device_id = :did
+                  AND recorded_at >= CURDATE() - INTERVAL 6 DAY
+                  AND temperature IS NOT NULL
+                GROUP BY DATE(recorded_at)
+                ORDER BY DATE(recorded_at) ASC
+            ");
+            $daily_7d->execute([':did' => $device['id']]);
+            $daily_7d = $daily_7d->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        // Phân bố theo giờ (24h gần nhất): trung bình mỗi slot giờ trong 7 ngày
+        $hourly_dist = [];
+        if ($device) {
+            $hourly_dist = $this->pdo->prepare("
+                SELECT
+                    HOUR(recorded_at) as hour_slot,
+                    AVG(temperature)  as avg_temp,
+                    AVG(humidity)     as avg_hum,
+                    AVG(nh3_ppm)      as avg_nh3,
+                    AVG(co2_ppm)      as avg_co2,
+                    AVG(light_lux)    as avg_lux
+                FROM env_readings
+                WHERE device_id = :did
+                  AND recorded_at >= NOW() - INTERVAL 7 DAY
+                  AND temperature IS NOT NULL
+                GROUP BY HOUR(recorded_at)
+                ORDER BY HOUR(recorded_at)
+            ");
+            $hourly_dist->execute([':did' => $device['id']]);
+            $hourly_dist = $hourly_dist->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        // Thống kê tổng quát (7 ngày)
+        $stats_7d = null;
+        if ($device) {
+            $stats_7d = $this->pdo->prepare("
+                SELECT
+                    COUNT(*) as total_readings,
+                    COUNT(temperature) as temp_readings,
+                    COUNT(nh3_ppm) as gas_readings,
+                    ROUND(AVG(temperature), 1) as avg_temp,
+                    ROUND(MIN(temperature), 1) as min_temp,
+                    ROUND(MAX(temperature), 1) as max_temp,
+                    ROUND(AVG(humidity), 1)    as avg_hum,
+                    ROUND(AVG(nh3_ppm), 1)     as avg_nh3,
+                    ROUND(MAX(nh3_ppm), 1)     as max_nh3,
+                    ROUND(AVG(co2_ppm), 1)     as avg_co2,
+                    ROUND(MAX(co2_ppm), 1)     as max_co2,
+                    SUM(CASE WHEN nh3_ppm > 25 THEN 1 ELSE 0 END) as nh3_over_count,
+                    SUM(CASE WHEN temperature > 35 THEN 1 ELSE 0 END) as temp_over_count,
+                    SUM(CASE WHEN humidity > 85 THEN 1 ELSE 0 END) as hum_over_count
+                FROM env_readings
+                WHERE device_id = :did
+                  AND recorded_at >= NOW() - INTERVAL 7 DAY
+            ");
+            $stats_7d->execute([':did' => $device['id']]);
+            $stats_7d = $stats_7d->fetch(PDO::FETCH_ASSOC);
+        }
+
         require view_path('env/env_barn.php');
     }
 
