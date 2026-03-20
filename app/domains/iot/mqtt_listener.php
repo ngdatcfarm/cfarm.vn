@@ -164,7 +164,7 @@ function handlePong(PDO $pdo, int $deviceId): void
 
 /**
  * Xử lý dữ liệu cảm biến môi trường từ ESP32 ENV Sensor
- * Lưu vào bảng sensor_readings
+ * Lưu vào bảng env_readings (khớp với EnvController)
  */
 function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message): void
 {
@@ -177,34 +177,52 @@ function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message):
     // Lấy barn_id từ device
     $barnId = $device['barn_id'] ?? null;
 
-    // Lấy cycle_id active (nếu có)
+    // Lấy cycle_id active + tính day_age
     $cycleId = null;
+    $dayAge = null;
     if ($barnId) {
-        $stmt = $pdo->prepare("SELECT id FROM cycles WHERE barn_id = ? AND status = 'active' LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id, start_date FROM cycles WHERE barn_id = ? AND status = 'active' LIMIT 1");
         $stmt->execute([$barnId]);
         $row = $stmt->fetch();
-        $cycleId = $row ? (int)$row['id'] : null;
+        if ($row) {
+            $cycleId = (int)$row['id'];
+            $dayAge = (int)((time() - strtotime($row['start_date'])) / 86400) + 1;
+        }
+    }
+
+    // Tính heat index (chỉ số nhiệt cảm nhận)
+    $temp = $data['temp'] ?? null;
+    $hum = $data['humidity'] ?? null;
+    $heatIndex = null;
+    if ($temp !== null && $hum !== null) {
+        $heatIndex = calcHeatIndex((float)$temp, (float)$hum);
     }
 
     $pdo->prepare("
-        INSERT INTO sensor_readings
-            (device_id, barn_id, cycle_id, temperature, humidity, lux,
-             nh3_ppm, mq137_raw, co2_ppm, mq135_raw, mq_warmup, recorded_at)
+        INSERT INTO env_readings
+            (device_id, barn_id, cycle_id, day_age,
+             temperature, humidity, heat_index, light_lux,
+             nh3_ppm, mq137_raw, co2_ppm, mq135_raw,
+             mq_warmup, recorded_at)
         VALUES
-            (:device_id, :barn_id, :cycle_id, :temp, :humidity, :lux,
-             :nh3, :mq137_raw, :co2, :mq135_raw, :warmup, NOW())
+            (:device_id, :barn_id, :cycle_id, :day_age,
+             :temp, :humidity, :heat_index, :lux,
+             :nh3, :mq137_raw, :co2, :mq135_raw,
+             :warmup, NOW())
     ")->execute([
-        ':device_id'  => $deviceId,
-        ':barn_id'    => $barnId,
-        ':cycle_id'   => $cycleId,
-        ':temp'       => $data['temp'] ?? null,
-        ':humidity'   => $data['humidity'] ?? null,
-        ':lux'        => $data['lux'] ?? null,
-        ':nh3'        => $data['nh3_ppm'] ?? null,
-        ':mq137_raw'  => $data['mq137_raw'] ?? null,
-        ':co2'        => $data['co2_ppm'] ?? null,
-        ':mq135_raw'  => $data['mq135_raw'] ?? null,
-        ':warmup'     => ($data['warmup'] ?? false) ? 1 : 0,
+        ':device_id'   => $deviceId,
+        ':barn_id'     => $barnId,
+        ':cycle_id'    => $cycleId,
+        ':day_age'     => $dayAge,
+        ':temp'        => $temp,
+        ':humidity'    => $hum,
+        ':heat_index'  => $heatIndex,
+        ':lux'         => $data['lux'] ?? null,
+        ':nh3'         => $data['nh3_ppm'] ?? null,
+        ':mq137_raw'   => $data['mq137_raw'] ?? null,
+        ':co2'         => $data['co2_ppm'] ?? null,
+        ':mq135_raw'   => $data['mq135_raw'] ?? null,
+        ':warmup'      => ($data['warmup'] ?? false) ? 1 : 0,
     ]);
 
     // Cập nhật device online status
@@ -213,7 +231,41 @@ function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message):
         WHERE id = ?
     ")->execute([$deviceId]);
 
-    logMsg("ENV [{$device['device_code']}] T={$data['temp']}°C H={$data['humidity']}% L={$data['lux']}lux NH3={$data['nh3_ppm']}ppm CO2={$data['co2_ppm']}ppm");
+    logMsg("ENV [{$device['device_code']}] T={$temp}°C H={$hum}% HI={$heatIndex}°C L={$data['lux']}lux NH3={$data['nh3_ppm']}ppm CO2={$data['co2_ppm']}ppm day={$dayAge}");
+}
+
+/**
+ * Tính Heat Index (chỉ số nhiệt cảm nhận) theo công thức Rothfusz
+ * Dùng cho cảnh báo stress nhiệt gia cầm
+ */
+function calcHeatIndex(float $tempC, float $humidity): float
+{
+    // Chuyển sang Fahrenheit để tính
+    $T = $tempC * 9.0 / 5.0 + 32.0;
+    $R = $humidity;
+
+    // Công thức đơn giản cho T < 80°F
+    $hi = 0.5 * ($T + 61.0 + (($T - 68.0) * 1.2) + ($R * 0.094));
+
+    if ($hi >= 80) {
+        // Công thức Rothfusz đầy đủ
+        $hi = -42.379 + 2.04901523*$T + 10.14333127*$R
+            - 0.22475541*$T*$R - 0.00683783*$T*$T
+            - 0.05481717*$R*$R + 0.00122874*$T*$T*$R
+            + 0.00085282*$T*$R*$R - 0.00000199*$T*$T*$R*$R;
+
+        // Điều chỉnh cho độ ẩm thấp
+        if ($R < 13 && $T >= 80 && $T <= 112) {
+            $hi -= ((13 - $R) / 4) * sqrt((17 - abs($T - 95)) / 17);
+        }
+        // Điều chỉnh cho độ ẩm cao
+        if ($R > 85 && $T >= 80 && $T <= 87) {
+            $hi += (($R - 85) / 10) * ((87 - $T) / 5);
+        }
+    }
+
+    // Chuyển về Celsius
+    return round(($hi - 32.0) * 5.0 / 9.0, 2);
 }
 
 /**
