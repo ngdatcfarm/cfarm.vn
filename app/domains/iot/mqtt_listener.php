@@ -55,9 +55,17 @@ function processMessage(PDO $pdo, string $topic, string $message): void
 {
     $parts = explode('/', $topic);
     // Expect: cfarm/{device_code}/{msg_type}
-    if (count($parts) < 3) return;
+    if (count($parts) < 3) {
+        logMsg("SKIP topic < 3 parts: {$topic}");
+        return;
+    }
 
     $msgType = end($parts);
+
+    // Log TẤT CẢ message nhận được (trừ heartbeat quá nhiều)
+    if ($msgType !== 'heartbeat') {
+        logMsg("<<< [{$topic}] type={$msgType} len=" . strlen($message));
+    }
 
     // Xây dựng mqtt_topic = tất cả phần trước msg_type
     $baseParts = array_slice($parts, 0, count($parts) - 1);
@@ -65,18 +73,31 @@ function processMessage(PDO $pdo, string $topic, string $message): void
 
     // Parse payload để lấy device_code - BẮT BUỘC phải có
     $data = json_decode($message, true);
+    if ($data === null) {
+        logMsg("JSON PARSE FAILED topic={$topic} raw=" . substr($message, 0, 200));
+        return;
+    }
     $payloadDeviceCode = $data['device'] ?? null;
 
     // Bỏ qua message không có device_code (retained rỗng, message lỗi, v.v.)
-    if (!$payloadDeviceCode) return;
+    if (!$payloadDeviceCode) {
+        if ($msgType === 'env') {
+            logMsg("ENV missing 'device' field! payload=" . substr($message, 0, 200));
+        }
+        return;
+    }
 
     // Tìm device CHỈ theo device_code (chính xác 1:1, không dùng mqtt_topic)
-    // Tránh device cũ cùng mqtt_topic ảnh hưởng device mới
     $stmt = $pdo->prepare("SELECT id, device_code, name, barn_id FROM devices WHERE device_code = ?");
     $stmt->execute([$payloadDeviceCode]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$device) return;
+    if (!$device) {
+        if ($msgType === 'env') {
+            logMsg("ENV device NOT FOUND in DB: device_code={$payloadDeviceCode}");
+        }
+        return;
+    }
 
     $deviceId = (int)$device['id'];
 
@@ -99,7 +120,7 @@ function processMessage(PDO $pdo, string $topic, string $message): void
             break;
 
         default:
-            // Log unknown message types for debugging
+            logMsg("UNKNOWN msg_type={$msgType} topic={$topic}");
             break;
     }
 }
