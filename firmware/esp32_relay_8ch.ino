@@ -36,7 +36,9 @@ const char* MQTT_SERVER = "app.cfarm.vn";
 const int   MQTT_PORT   = 1883;
 const char* MQTT_USER   = "cfarm_device";
 const char* MQTT_PASS   = "Abc@@123";
-const char* MQTT_TOPIC  = "cfarm/YOUR_MQTT_TOPIC";
+// MQTT_TOPIC phai KHOP voi devices.mqtt_topic trong DB
+// Vi du: DB co mqtt_topic = "cfarm/barn1/0010" thi dat DUNG nhu vay
+const char* MQTT_TOPIC  = "YOUR_MQTT_TOPIC";
 
 // ======================== PHAN CUNG ========================
 
