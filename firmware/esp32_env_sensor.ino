@@ -226,7 +226,9 @@ void loop() {
     }
 
     // Gui du lieu cam bien
-    if (now - lastEnvSend > ENV_INTERVAL_MS) {
+    // Lan dau: gui sau 30s (cho sensor on dinh), sau do moi 5 phut
+    unsigned long envDelay = (envSendCount == 0) ? 30000 : ENV_INTERVAL_MS;
+    if (now - lastEnvSend > envDelay) {
         lastEnvSend = now;
         readAndSendEnv();
     }
@@ -261,17 +263,6 @@ int readADCAvg(int pin, float* outVariance = nullptr) {
         *outVariance = (float)(sumSq / ADC_SAMPLES) - (float)avg * avg;
     }
     return avg;
-}
-
-/**
- * Kiem tra ADC co phai chan floating (khong cam sensor)
- * Chan floating: variance cao (noise), sensor that: variance thap (on dinh)
- * Nguong 5000: sensor that thuong < 1000, floating thuong > 10000
- */
-bool isADCFloating(int pin) {
-    float variance = 0;
-    readADCAvg(pin, &variance);
-    return (variance > 5000);
 }
 
 /**
@@ -427,8 +418,6 @@ void mqttReconnect() {
         Serial.println("[MQTT] Da ket noi! (voi LWT)");
         mqtt.subscribe(topicCmd);
         sendHeartbeat();
-        // Gui du lieu cam bien ngay khi ket noi
-        readAndSendEnv();
     } else {
         Serial.printf("[MQTT] That bai, rc=%d\n", mqtt.state());
     }

@@ -169,10 +169,16 @@ function handlePong(PDO $pdo, int $deviceId): void
 function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message): void
 {
     $data = json_decode($message, true);
-    if (!$data) return;
+    if (!$data) {
+        logMsg("ENV [{$device['device_code']}] JSON parse failed: " . substr($message, 0, 200));
+        return;
+    }
 
     // Bỏ qua message status (ví dụ OTA updating)
-    if (isset($data['status'])) return;
+    if (isset($data['status'])) {
+        logMsg("ENV [{$device['device_code']}] skip status msg: {$data['status']}");
+        return;
+    }
 
     // Lấy barn_id từ device
     $barnId = $device['barn_id'] ?? null;
@@ -198,32 +204,38 @@ function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message):
         $heatIndex = calcHeatIndex((float)$temp, (float)$hum);
     }
 
-    $pdo->prepare("
-        INSERT INTO env_readings
-            (device_id, barn_id, cycle_id, day_age,
-             temperature, humidity, heat_index, light_lux,
-             nh3_ppm, mq137_raw, co2_ppm, mq135_raw,
-             mq_warmup, recorded_at)
-        VALUES
-            (:device_id, :barn_id, :cycle_id, :day_age,
-             :temp, :humidity, :heat_index, :lux,
-             :nh3, :mq137_raw, :co2, :mq135_raw,
-             :warmup, NOW())
-    ")->execute([
-        ':device_id'   => $deviceId,
-        ':barn_id'     => $barnId,
-        ':cycle_id'    => $cycleId,
-        ':day_age'     => $dayAge,
-        ':temp'        => $temp,
-        ':humidity'    => $hum,
-        ':heat_index'  => $heatIndex,
-        ':lux'         => $data['lux'] ?? null,
-        ':nh3'         => $data['nh3_ppm'] ?? null,
-        ':mq137_raw'   => $data['mq137_raw'] ?? null,
-        ':co2'         => $data['co2_ppm'] ?? null,
-        ':mq135_raw'   => $data['mq135_raw'] ?? null,
-        ':warmup'      => ($data['warmup'] ?? false) ? 1 : 0,
-    ]);
+    try {
+        $pdo->prepare("
+            INSERT INTO env_readings
+                (device_id, barn_id, cycle_id, day_age,
+                 temperature, humidity, heat_index, light_lux,
+                 nh3_ppm, mq137_raw, co2_ppm, mq135_raw,
+                 mq_warmup, recorded_at)
+            VALUES
+                (:device_id, :barn_id, :cycle_id, :day_age,
+                 :temp, :humidity, :heat_index, :lux,
+                 :nh3, :mq137_raw, :co2, :mq135_raw,
+                 :warmup, NOW())
+        ")->execute([
+            ':device_id'   => $deviceId,
+            ':barn_id'     => $barnId,
+            ':cycle_id'    => $cycleId,
+            ':day_age'     => $dayAge,
+            ':temp'        => $temp,
+            ':humidity'    => $hum,
+            ':heat_index'  => $heatIndex,
+            ':lux'         => $data['lux'] ?? null,
+            ':nh3'         => $data['nh3_ppm'] ?? null,
+            ':mq137_raw'   => $data['mq137_raw'] ?? null,
+            ':co2'         => $data['co2_ppm'] ?? null,
+            ':mq135_raw'   => $data['mq135_raw'] ?? null,
+            ':warmup'      => ($data['warmup'] ?? false) ? 1 : 0,
+        ]);
+    } catch (PDOException $e) {
+        logMsg("ENV [{$device['device_code']}] INSERT FAILED: " . $e->getMessage());
+        logMsg("ENV [{$device['device_code']}] payload: " . substr($message, 0, 300));
+        return;
+    }
 
     // Cập nhật device online status
     $pdo->prepare("
@@ -231,7 +243,10 @@ function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message):
         WHERE id = ?
     ")->execute([$deviceId]);
 
-    logMsg("ENV [{$device['device_code']}] T={$temp}°C H={$hum}% HI={$heatIndex}°C L={$data['lux']}lux NH3={$data['nh3_ppm']}ppm CO2={$data['co2_ppm']}ppm day={$dayAge}");
+    $nullCount = ($temp === null ? 1 : 0) + ($hum === null ? 1 : 0) + (($data['lux'] ?? null) === null ? 1 : 0)
+        + (($data['nh3_ppm'] ?? null) === null ? 1 : 0) + (($data['co2_ppm'] ?? null) === null ? 1 : 0);
+    $nullInfo = $nullCount > 0 ? " ({$nullCount} null sensors)" : "";
+    logMsg("ENV [{$device['device_code']}] OK{$nullInfo} T={$temp} H={$hum} HI={$heatIndex} L=" . ($data['lux'] ?? 'null') . " NH3=" . ($data['nh3_ppm'] ?? 'null') . " CO2=" . ($data['co2_ppm'] ?? 'null') . " day={$dayAge}");
 }
 
 /**
