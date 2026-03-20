@@ -57,6 +57,8 @@ class CurtainController
                    d.mqtt_topic,
                    uc.channel_number as up_channel,
                    dc.channel_number as down_channel,
+                   uc.id as up_channel_id_fk,
+                   dc.id as down_channel_id_fk,
                    uc.gpio_pin as up_gpio,
                    dc.gpio_pin as down_gpio,
                    d.is_online
@@ -184,72 +186,79 @@ class CurtainController
             $this->json(['ok' => false, 'message' => 'Curtain not found'], 404);
         }
 
-        // Dừng bạt nếu đang chạy
-        $currentPos = $this->stopCurtain($c);
+        try {
+            // Dừng bạt nếu đang chạy
+            $currentPos = $this->stopCurtain($c);
 
-        // Nếu đã ở vị trí
-        $diff = $target_pct - $currentPos;
-        if ($diff == 0) {
-            $this->json(['ok' => true, 'message' => 'Already at position', 'position' => $currentPos, 'duration' => 0]);
+            // Nếu đã ở vị trí
+            $diff = $target_pct - $currentPos;
+            if ($diff == 0) {
+                $this->json(['ok' => true, 'message' => 'Already at position', 'position' => $currentPos, 'duration' => 0]);
+            }
+
+            // Tính hướng và thời gian
+            if ($diff > 0) {
+                // Mở (position tăng)
+                $duration = abs($diff) / 100 * (float)$c['full_down_seconds'];
+                $channel = (int)$c['down_channel'];
+                $channelId = $c['down_channel_id_fk'];
+                $dir = 'down';
+                $mstate = 'moving_down';
+            } else {
+                // Đóng (position giảm)
+                $duration = abs($diff) / 100 * (float)$c['full_up_seconds'];
+                $channel = (int)$c['up_channel'];
+                $channelId = $c['up_channel_id_fk'];
+                $dir = 'up';
+                $mstate = 'moving_up';
+            }
+
+            // Gửi MQTT
+            $sent = $this->mqtt->sendRelayOnWithDuration($c['mqtt_topic'], $channel, max(1, (int)$duration));
+
+            if (!$sent) {
+                $this->json(['ok' => false, 'message' => 'Không gửi được lệnh MQTT']);
+            }
+
+            // Lưu trạng thái
+            $this->pdo->prepare("
+                UPDATE curtain_configs
+                SET moving_state = :mstate,
+                    moving_target_pct = :target,
+                    moving_started_at = NOW(),
+                    moving_duration_seconds = :dur
+                WHERE id = :id
+            ")->execute([
+                ':mstate' => $mstate,
+                ':target' => $target_pct,
+                ':dur'    => round($duration, 1),
+                ':id'     => $id,
+            ]);
+
+            // Log command
+            $cycle_id = $this->getActiveCycleId((int)$c['barn_id']);
+            $this->pdo->prepare("
+                INSERT INTO device_commands (device_id, channel_id, command_type, payload, source, status, sent_at, barn_id, cycle_id)
+                VALUES (:did, :chid, 'set_position', :payload, 'manual', 'sent', NOW(), :barn_id, :cycle_id)
+            ")->execute([
+                ':did'     => $c['device_id'],
+                ':chid'    => $channelId,
+                ':payload' => json_encode(['from' => $currentPos, 'to' => $target_pct, 'duration' => round($duration, 1)]),
+                ':barn_id' => $c['barn_id'],
+                ':cycle_id' => $cycle_id,
+            ]);
+
+            $this->json([
+                'ok'        => true,
+                'position'  => $currentPos,
+                'target'    => $target_pct,
+                'direction' => $dir,
+                'duration'  => round($duration, 1),
+            ]);
+        } catch (\Throwable $e) {
+            error_log("[CurtainController] curtain_move error: " . $e->getMessage());
+            $this->json(['ok' => false, 'message' => 'Lỗi hệ thống: ' . $e->getMessage()], 500);
         }
-
-        // Tính hướng và thời gian
-        if ($diff > 0) {
-            // Mở (position tăng)
-            $duration = abs($diff) / 100 * (float)$c['full_down_seconds'];
-            $channel = (int)$c['down_channel'];
-            $dir = 'down';
-            $mstate = 'moving_down';
-        } else {
-            // Đóng (position giảm)
-            $duration = abs($diff) / 100 * (float)$c['full_up_seconds'];
-            $channel = (int)$c['up_channel'];
-            $dir = 'up';
-            $mstate = 'moving_up';
-        }
-
-        // Gửi MQTT
-        $sent = $this->mqtt->sendRelayOnWithDuration($c['mqtt_topic'], $channel, (int)$duration);
-        
-        if (!$sent) {
-            $this->json(['ok' => false, 'message' => 'MQTT send failed']);
-        }
-
-        // Lưu trạng thái
-        $this->pdo->prepare("
-            UPDATE curtain_configs
-            SET moving_state = :mstate,
-                moving_target_pct = :target,
-                moving_started_at = NOW(),
-                moving_duration_seconds = :dur
-            WHERE id = :id
-        ")->execute([
-            ':mstate' => $mstate,
-            ':target' => $target_pct,
-            ':dur'    => round($duration, 1),
-            ':id'     => $id,
-        ]);
-
-        // Log command
-        $cycle_id = $this->getActiveCycleId((int)$c['barn_id']);
-        $this->pdo->prepare("
-            INSERT INTO device_commands (device_id, channel_id, command_type, payload, source, status, sent_at, barn_id, cycle_id)
-            VALUES (:did, :chid, 'set_position', :payload, 'manual', 'sent', NOW(), :barn_id, :cycle_id)
-        ")->execute([
-            ':did'     => $c['device_id'],
-            ':chid'    => $channel,
-            ':payload' => json_encode(['from' => $currentPos, 'to' => $target_pct, 'duration' => round($duration, 1)]),
-            ':barn_id' => $c['barn_id'],
-            ':cycle_id' => $cycle_id,
-        ]);
-
-        $this->json([
-            'ok'        => true,
-            'position'  => $currentPos,
-            'target'    => $target_pct,
-            'direction' => $dir,
-            'duration'  => round($duration, 1),
-        ]);
     }
 
     /**
@@ -258,15 +267,19 @@ class CurtainController
     public function curtain_stop(array $vars): void
     {
         $id = (int)$vars['id'];
-        
+
         $c = $this->getCurtainFull($id);
         if (!$c) {
             $this->json(['ok' => false, 'message' => 'Not found'], 404);
         }
 
-        $realPos = $this->stopCurtain($c);
-
-        $this->json(['ok' => true, 'message' => 'Stopped', 'position' => $realPos]);
+        try {
+            $realPos = $this->stopCurtain($c);
+            $this->json(['ok' => true, 'message' => 'Stopped', 'position' => $realPos]);
+        } catch (\Throwable $e) {
+            error_log("[CurtainController] curtain_stop error: " . $e->getMessage());
+            $this->json(['ok' => false, 'message' => 'Lỗi hệ thống: ' . $e->getMessage()], 500);
+        }
     }
 
     /**

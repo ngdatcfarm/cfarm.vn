@@ -162,21 +162,29 @@ async function moveCurtain(id, targetPct) {
             alert(json.message || 'Lỗi gửi lệnh');
         }
     } catch(e) {
-        alert('Lỗi kết nối');
+        console.error('moveCurtain error:', e);
+        alert('Lỗi kết nối: ' + e.message);
     }
     card.classList.remove('opacity-70');
 }
 
 async function stopCurtain(id) {
-    const res = await fetch('/iot/curtain/' + id + '/stop', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'}
-    });
-    const json = await res.json();
-    if (json.ok) {
-        hideMovingState(id);
-        updateCurtainUI(id, json.position);
-        showToast('■ Đã dừng bạt · Vị trí: ' + json.position + '%');
+    try {
+        const res = await fetch('/iot/curtain/' + id + '/stop', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+        });
+        const json = await res.json();
+        if (json.ok) {
+            hideMovingState(id);
+            updateCurtainUI(id, json.position);
+            showToast('■ Đã dừng bạt · Vị trí: ' + json.position + '%');
+        } else {
+            alert(json.message || 'Lỗi gửi lệnh dừng');
+        }
+    } catch(e) {
+        console.error('stopCurtain error:', e);
+        alert('Lỗi kết nối: ' + e.message);
     }
 }
 
