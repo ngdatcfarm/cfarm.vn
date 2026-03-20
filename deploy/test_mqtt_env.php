@@ -51,7 +51,7 @@ try {
 // Step 2: Lấy device_code đầu tiên từ DB
 echo "[2] Tìm device trong DB...\n";
 $device = $pdo->query("
-    SELECT d.id, d.device_code, d.mqtt_topic, d.barn_id, d.device_type, d.is_online
+    SELECT d.id, d.device_code, d.mqtt_topic, d.barn_id, d.device_type_id, d.is_online
     FROM devices d
     ORDER BY d.id
 ")->fetchAll(PDO::FETCH_ASSOC);
@@ -65,13 +65,14 @@ if (empty($device)) {
 echo "    Danh sách devices:\n";
 foreach ($device as $d) {
     $online = $d['is_online'] ? 'ONLINE' : 'offline';
-    echo "    - [{$d['id']}] {$d['device_code']} | topic={$d['mqtt_topic']} | barn={$d['barn_id']} | type={$d['device_type']} | {$online}\n";
+    echo "    - [{$d['id']}] {$d['device_code']} | topic={$d['mqtt_topic']} | barn={$d['barn_id']} | type_id={$d['device_type_id']} | {$online}\n";
 }
 
 // Tìm ENV sensor device
 $envDevice = null;
 foreach ($device as $d) {
-    if (stripos($d['device_type'] ?? '', 'env') !== false || stripos($d['device_type'] ?? '', 'sensor') !== false) {
+    // device_type_id: 1=relay, 2=env_sensor, 3=camera, 4=mixed
+    if (in_array($d['device_type_id'], [2, 4]) || stripos($d['device_code'], 'sensor') !== false) {
         $envDevice = $d;
         break;
     }
