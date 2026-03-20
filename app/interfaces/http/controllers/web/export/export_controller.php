@@ -17,7 +17,7 @@ class ExportController
         $stats['care_feeds']       = (int)$this->pdo->query("SELECT COUNT(*) FROM care_feeds")->fetchColumn();
         $stats['care_deaths']      = (int)$this->pdo->query("SELECT COUNT(*) FROM care_deaths")->fetchColumn();
         $stats['care_sales']       = (int)$this->pdo->query("SELECT COUNT(*) FROM care_sales")->fetchColumn();
-        $stats['sensor_readings']  = (int)$this->pdo->query("SELECT COUNT(*) FROM sensor_readings")->fetchColumn();
+        $stats['sensor_readings']  = (int)$this->pdo->query("SELECT COUNT(*) FROM env_readings")->fetchColumn();
         $stats['weight_sessions']  = (int)$this->pdo->query("SELECT COUNT(*) FROM weight_sessions")->fetchColumn();
         $stats['date_range_start'] = $this->pdo->query("SELECT MIN(start_date) FROM cycles")->fetchColumn();
         $stats['date_range_end']   = $this->pdo->query("SELECT MAX(snapshot_date) FROM cycle_daily_snapshots")->fetchColumn();
@@ -188,19 +188,28 @@ class ExportController
     {
         return $this->pdo->query("
             SELECT
-                sr.recorded_at,
-                d.device_code,
-                d.mqtt_topic,
+                e.recorded_at,
+                c.code as cycle_code,
+                c.breed,
+                e.day_age,
                 b.name as barn_name,
-                sr.temperature,
-                sr.humidity,
-                sr.heat_index,
+                d.device_code,
+                e.temperature,
+                e.humidity,
+                e.heat_index,
+                e.nh3_ppm,
+                e.co2_ppm,
+                e.light_lux,
+                e.wind_speed_ms,
+                e.is_raining,
+                e.mq_warmup,
                 d.wifi_rssi,
                 d.firmware_version
-            FROM sensor_readings sr
-            JOIN devices d ON d.id = sr.device_id
-            LEFT JOIN barns b ON b.id = d.barn_id
-            ORDER BY sr.recorded_at
+            FROM env_readings e
+            JOIN devices d ON d.id = e.device_id
+            LEFT JOIN barns b ON b.id = e.barn_id
+            LEFT JOIN cycles c ON c.id = e.cycle_id
+            ORDER BY e.recorded_at
         ")->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -285,12 +294,20 @@ class ExportController
             $sales = $this->pdo->prepare("SELECT * FROM care_sales WHERE cycle_id=:id ORDER BY recorded_at");
             $sales->execute([':id' => $c->id]);
 
+            $env = $this->pdo->prepare("
+                SELECT recorded_at, day_age, temperature, humidity, heat_index,
+                       nh3_ppm, co2_ppm, light_lux, wind_speed_ms, is_raining, mq_warmup
+                FROM env_readings WHERE cycle_id=:id ORDER BY recorded_at
+            ");
+            $env->execute([':id' => $c->id]);
+
             $result[] = [
-                'cycle'     => $c,
-                'snapshots' => $snapshots->fetchAll(PDO::FETCH_OBJ),
-                'feeds'     => $feeds->fetchAll(PDO::FETCH_OBJ),
-                'deaths'    => $deaths->fetchAll(PDO::FETCH_OBJ),
-                'sales'     => $sales->fetchAll(PDO::FETCH_OBJ),
+                'cycle'        => $c,
+                'snapshots'    => $snapshots->fetchAll(PDO::FETCH_OBJ),
+                'feeds'        => $feeds->fetchAll(PDO::FETCH_OBJ),
+                'deaths'       => $deaths->fetchAll(PDO::FETCH_OBJ),
+                'sales'        => $sales->fetchAll(PDO::FETCH_OBJ),
+                'env_readings' => $env->fetchAll(PDO::FETCH_OBJ),
             ];
         }
         return $result;
