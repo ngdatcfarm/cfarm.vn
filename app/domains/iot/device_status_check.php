@@ -32,11 +32,13 @@ if ($count > 0) {
 
 // 2. Gửi push notification cho devices đang offline mà chưa được acknowledged
 $offline_devices = $pdo->query("
-    SELECT d.id, d.device_code, d.device_name, d.last_heartbeat_at,
+    SELECT d.id, d.device_code, d.name, d.last_heartbeat_at,
+           d.alert_offline, d.last_offline_alert_at,
            b.name AS barn_name
     FROM devices d
     LEFT JOIN barns b ON d.barn_id = b.id
     WHERE d.is_online = 0
+      AND d.alert_offline = 1
       AND d.last_heartbeat_at IS NOT NULL
 ")->fetchAll();
 
@@ -88,7 +90,7 @@ foreach ($offline_devices as $dev) {
 
     $barn_label = $dev['barn_name'] ? ' · ' . $dev['barn_name'] : '';
     $title = '⚠️ Thiết bị mất kết nối' . $barn_label;
-    $body  = $dev['device_name'] . ' (' . $dev['device_code'] . ') offline ' . $offline_str;
+    $body  = $dev['name'] . ' (' . $dev['device_code'] . ') offline ' . $offline_str;
 
     $push->send_all(
         'DEVICE_OFFLINE',
