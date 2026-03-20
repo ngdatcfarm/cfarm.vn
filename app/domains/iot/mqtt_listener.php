@@ -72,7 +72,7 @@ function processMessage(PDO $pdo, string $topic, string $message): void
 
     // Tìm device CHỈ theo device_code (chính xác 1:1, không dùng mqtt_topic)
     // Tránh device cũ cùng mqtt_topic ảnh hưởng device mới
-    $stmt = $pdo->prepare("SELECT id, device_code, name FROM devices WHERE device_code = ?");
+    $stmt = $pdo->prepare("SELECT id, device_code, name, barn_id FROM devices WHERE device_code = ?");
     $stmt->execute([$payloadDeviceCode]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -92,6 +92,10 @@ function processMessage(PDO $pdo, string $topic, string $message): void
 
         case 'pong':
             handlePong($pdo, $deviceId);
+            break;
+
+        case 'env':
+            handleEnvData($pdo, $deviceId, $device, $message);
             break;
 
         default:
@@ -156,6 +160,60 @@ function handlePong(PDO $pdo, int $deviceId): void
             ping_fail_count = 0
         WHERE id = ?
     ")->execute([$deviceId]);
+}
+
+/**
+ * Xử lý dữ liệu cảm biến môi trường từ ESP32 ENV Sensor
+ * Lưu vào bảng sensor_readings
+ */
+function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message): void
+{
+    $data = json_decode($message, true);
+    if (!$data) return;
+
+    // Bỏ qua message status (ví dụ OTA updating)
+    if (isset($data['status'])) return;
+
+    // Lấy barn_id từ device
+    $barnId = $device['barn_id'] ?? null;
+
+    // Lấy cycle_id active (nếu có)
+    $cycleId = null;
+    if ($barnId) {
+        $stmt = $pdo->prepare("SELECT id FROM cycles WHERE barn_id = ? AND status = 'active' LIMIT 1");
+        $stmt->execute([$barnId]);
+        $row = $stmt->fetch();
+        $cycleId = $row ? (int)$row['id'] : null;
+    }
+
+    $pdo->prepare("
+        INSERT INTO sensor_readings
+            (device_id, barn_id, cycle_id, temperature, humidity, lux,
+             nh3_ppm, mq137_raw, co2_ppm, mq135_raw, mq_warmup, recorded_at)
+        VALUES
+            (:device_id, :barn_id, :cycle_id, :temp, :humidity, :lux,
+             :nh3, :mq137_raw, :co2, :mq135_raw, :warmup, NOW())
+    ")->execute([
+        ':device_id'  => $deviceId,
+        ':barn_id'    => $barnId,
+        ':cycle_id'   => $cycleId,
+        ':temp'       => $data['temp'] ?? null,
+        ':humidity'   => $data['humidity'] ?? null,
+        ':lux'        => $data['lux'] ?? null,
+        ':nh3'        => $data['nh3_ppm'] ?? null,
+        ':mq137_raw'  => $data['mq137_raw'] ?? null,
+        ':co2'        => $data['co2_ppm'] ?? null,
+        ':mq135_raw'  => $data['mq135_raw'] ?? null,
+        ':warmup'     => ($data['warmup'] ?? false) ? 1 : 0,
+    ]);
+
+    // Cập nhật device online status
+    $pdo->prepare("
+        UPDATE devices SET is_online = 1, last_heartbeat_at = NOW(), ping_fail_count = 0
+        WHERE id = ?
+    ")->execute([$deviceId]);
+
+    logMsg("ENV [{$device['device_code']}] T={$data['temp']}°C H={$data['humidity']}% L={$data['lux']}lux NH3={$data['nh3_ppm']}ppm CO2={$data['co2_ppm']}ppm");
 }
 
 /**
