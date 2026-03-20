@@ -69,6 +69,16 @@ foreach ($notifications as $n) {
                     <?php if ($n->failed_count > 0): ?>
                     <span class="text-red-400"><?= $n->failed_count ?> lỗi</span>
                     <?php endif; ?>
+                    <?php if ($n->type === 'DEVICE_OFFLINE'): ?>
+                        <?php if ($n->acknowledged_at): ?>
+                        <span class="text-green-400">✓ Đã biết</span>
+                        <?php else: ?>
+                        <button onclick="ackNotification(this)"
+                                class="ml-auto px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-xs font-semibold transition-colors">
+                            Đã biết
+                        </button>
+                        <?php endif; ?>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -79,6 +89,34 @@ foreach ($notifications as $n) {
 <?php endforeach; ?>
 
 <?php endif; ?>
+
+<script>
+function ackNotification(btn) {
+    btn.disabled = true;
+    btn.textContent = '...';
+    fetch('/push/acknowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'DEVICE_OFFLINE' }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            // Cập nhật tất cả nút DEVICE_OFFLINE trên trang
+            document.querySelectorAll('button[onclick="ackNotification(this)"]').forEach(b => {
+                const span = document.createElement('span');
+                span.className = 'text-green-400';
+                span.textContent = '✓ Đã biết';
+                b.replaceWith(span);
+            });
+        } else {
+            btn.disabled = false;
+            btn.textContent = 'Đã biết';
+        }
+    })
+    .catch(() => { btn.disabled = false; btn.textContent = 'Đã biết'; });
+}
+</script>
 
 <?php
 $content = ob_get_clean();

@@ -40,7 +40,8 @@ $offline_devices = $pdo->query("
     WHERE d.is_online = 0
       AND d.alert_offline = 1
       AND d.last_heartbeat_at IS NOT NULL
-      AND d.last_offline_alert_at IS NULL
+      AND (d.last_offline_alert_at IS NULL
+           OR d.last_offline_alert_at < DATE_SUB(NOW(), INTERVAL 30 DAY))
 ")->fetchAll();
 
 if (empty($offline_devices)) exit;
