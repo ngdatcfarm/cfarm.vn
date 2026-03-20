@@ -73,7 +73,7 @@ foreach ($notifications as $n) {
                         <?php if ($n->acknowledged_at): ?>
                         <span class="text-green-400">✓ Đã biết</span>
                         <?php else: ?>
-                        <button onclick="ackNotification(this)"
+                        <button onclick="ackNotification(this, <?= (int)$n->id ?>)"
                                 class="ml-auto px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-xs font-semibold transition-colors">
                             Đã biết
                         </button>
@@ -91,24 +91,21 @@ foreach ($notifications as $n) {
 <?php endif; ?>
 
 <script>
-function ackNotification(btn) {
+function ackNotification(btn, notifId) {
     btn.disabled = true;
     btn.textContent = '...';
     fetch('/push/acknowledge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'DEVICE_OFFLINE' }),
+        body: JSON.stringify({ id: notifId }),
     })
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
-            // Cập nhật tất cả nút DEVICE_OFFLINE trên trang
-            document.querySelectorAll('button[onclick="ackNotification(this)"]').forEach(b => {
-                const span = document.createElement('span');
-                span.className = 'text-green-400';
-                span.textContent = '✓ Đã biết';
-                b.replaceWith(span);
-            });
+            const span = document.createElement('span');
+            span.className = 'text-green-400';
+            span.textContent = '✓ Đã biết';
+            btn.replaceWith(span);
         } else {
             btn.disabled = false;
             btn.textContent = 'Đã biết';

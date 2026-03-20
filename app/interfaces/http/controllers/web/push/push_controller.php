@@ -59,30 +59,58 @@ class PushController
     public function acknowledge(array $vars): void
     {
         $body = json_decode(file_get_contents('php://input'), true);
+        $id   = $body['id'] ?? null;
         $type = $body['type'] ?? null;
 
-        if (!$type) {
-            $this->json(false, 'Thiếu type');
+        if (!$id && !$type) {
+            $this->json(false, 'Thiếu id hoặc type');
             return;
         }
 
-        // Acknowledge tất cả notifications chưa ack của type này
-        $stmt = $this->pdo->prepare("
-            UPDATE push_notifications_log
-            SET acknowledged_at = NOW()
-            WHERE type = :type AND acknowledged_at IS NULL
-        ");
-        $stmt->execute([':type' => $type]);
-
-        // DEVICE_OFFLINE: đánh dấu trên devices để dừng alert (có hiệu lực đến khi device online lại)
-        if ($type === 'DEVICE_OFFLINE') {
-            $this->pdo->exec("
-                UPDATE devices SET last_offline_alert_at = NOW()
-                WHERE is_online = 0 AND alert_offline = 1
+        if ($id) {
+            // Acknowledge 1 notification cụ thể + update device tương ứng
+            $stmt = $this->pdo->prepare("
+                SELECT id, body FROM push_notifications_log
+                WHERE id = :id AND type = 'DEVICE_OFFLINE' AND acknowledged_at IS NULL
             ");
-        }
+            $stmt->execute([':id' => $id]);
+            $notif = $stmt->fetch(\PDO::FETCH_ASSOC);
 
-        $this->json(true, 'Đã xác nhận', ['updated' => $stmt->rowCount()]);
+            if (!$notif) {
+                $this->json(false, 'Không tìm thấy hoặc đã xác nhận');
+                return;
+            }
+
+            $this->pdo->prepare("UPDATE push_notifications_log SET acknowledged_at = NOW() WHERE id = :id")
+                ->execute([':id' => $id]);
+
+            // Trích device_code từ body: "Tên (DEVICE_CODE) offline ..."
+            if (preg_match('/\(([A-Za-z0-9_-]+)\)\s+offline/', $notif['body'], $m)) {
+                $this->pdo->prepare("
+                    UPDATE devices SET last_offline_alert_at = NOW()
+                    WHERE device_code = :code AND is_online = 0
+                ")->execute([':code' => $m[1]]);
+            }
+
+            $this->json(true, 'Đã xác nhận', ['updated' => 1]);
+        } else {
+            // Fallback: acknowledge theo type (từ sw.js push notification action)
+            $stmt = $this->pdo->prepare("
+                UPDATE push_notifications_log
+                SET acknowledged_at = NOW()
+                WHERE type = :type AND acknowledged_at IS NULL
+            ");
+            $stmt->execute([':type' => $type]);
+
+            if ($type === 'DEVICE_OFFLINE') {
+                $this->pdo->exec("
+                    UPDATE devices SET last_offline_alert_at = NOW()
+                    WHERE is_online = 0 AND alert_offline = 1
+                ");
+            }
+
+            $this->json(true, 'Đã xác nhận', ['updated' => $stmt->rowCount()]);
+        }
     }
 
     // POST /push/test
