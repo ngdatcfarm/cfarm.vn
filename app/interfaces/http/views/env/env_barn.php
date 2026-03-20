@@ -78,14 +78,15 @@ $avg_nh3_fcr   = json_encode(array_column($env_fcr, 'avg_nh3'));
 </div>
 <?php endif; ?>
 
+<?php $interval = $device['env_interval_seconds'] ?? 300; ?>
 <!-- Interval config -->
 <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-4">
     <div class="flex items-center justify-between">
         <div>
             <div class="text-sm font-semibold">Tần suất cập nhật</div>
             <div class="text-xs text-gray-400 mt-0.5">
-                Hiện tại: <strong><?= $device['env_interval_seconds'] ?>s</strong>
-                (<?= round($device['env_interval_seconds']/60, 1) ?> phút)
+                Hiện tại: <strong><?= $interval ?>s</strong>
+                (<?= round($interval/60, 1) ?> phút)
             </div>
         </div>
         <form method="POST" action="/env/barn/<?= $barn['id'] ?>/interval" class="flex items-center gap-2">
@@ -100,7 +101,7 @@ $avg_nh3_fcr   = json_encode(array_column($env_fcr, 'avg_nh3'));
                     600 => '10 phút',
                     900 => '15 phút',
                 ] as $val => $label): ?>
-                <option value="<?= $val ?>" <?= $device['env_interval_seconds'] == $val ? 'selected' : '' ?>>
+                <option value="<?= $val ?>" <?= $interval == $val ? 'selected' : '' ?>>
                     <?= $label ?>
                 </option>
                 <?php endforeach; ?>
