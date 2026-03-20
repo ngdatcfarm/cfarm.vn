@@ -101,7 +101,7 @@ foreach ($assets as $a) { $asset_by_status[$a['status']][] = $a; }
     </div>
 </div>
 
-<div id="modal_purchase" class="hidden fixed inset-0 z-50 flex items-end overflow-hidden">
+<div id="modal_purchase" class="hidden fixed inset-0 z-50 flex items-end">
     <div class="absolute inset-0 bg-black/40" onclick="closeModal('modal_purchase')"></div>
     <div class="relative w-full max-w-lg mx-auto bg-white dark:bg-gray-800 rounded-t-2xl p-5 space-y-3 animate-sheet overflow-y-auto" style="max-height:85vh">
         <div class="w-10 h-1 bg-gray-200 dark:bg-gray-600 rounded-full mx-auto mb-2"></div>
@@ -123,7 +123,7 @@ foreach ($assets as $a) { $asset_by_status[$a['status']][] = $a; }
     </div>
 </div>
 
-<div id="modal_update_asset" class="hidden fixed inset-0 z-50 flex items-end overflow-hidden">
+<div id="modal_update_asset" class="hidden fixed inset-0 z-50 flex items-end">
     <div class="absolute inset-0 bg-black/40" onclick="closeModal('modal_update_asset')"></div>
     <div class="relative w-full max-w-lg mx-auto bg-white dark:bg-gray-800 rounded-t-2xl p-5 space-y-3 animate-sheet overflow-y-auto" style="max-height:85vh">
         <div class="w-10 h-1 bg-gray-200 dark:bg-gray-600 rounded-full mx-auto mb-2"></div>
@@ -165,7 +165,7 @@ foreach ($assets as $a) { $asset_by_status[$a['status']][] = $a; }
     </div>
 </div>
 
-<div id="modal_add_item" class="hidden fixed inset-0 z-50 flex items-end overflow-hidden">
+<div id="modal_add_item" class="hidden fixed inset-0 z-50 flex items-end">
     <div class="absolute inset-0 bg-black/40" onclick="closeModal('modal_add_item')"></div>
     <div class="relative w-full max-w-lg mx-auto bg-white dark:bg-gray-800 rounded-t-2xl p-5 space-y-3 animate-sheet overflow-y-auto" style="max-height:85vh">
         <div class="w-10 h-1 bg-gray-200 dark:bg-gray-600 rounded-full mx-auto mb-2"></div>
