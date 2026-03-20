@@ -10,13 +10,13 @@ class EnvController
     // GET /env — dashboard overview tất cả barn
     public function index(array $vars): void
     {
-        // Latest reading mỗi barn
+        // Latest reading mỗi barn (env_readings = trong chuồng, env_weather = thời tiết ngoài)
         $barns = $this->pdo->query("
             SELECT
                 b.id, b.name,
                 e.temperature, e.humidity, e.heat_index,
                 e.nh3_ppm, e.co2_ppm, e.light_lux,
-                e.wind_speed_ms, e.is_raining,
+                w.wind_speed_ms, w.is_raining,
                 e.recorded_at,
                 c.code as cycle_code, c.id as cycle_id,
                 e.day_age,
@@ -32,6 +32,11 @@ class EnvController
             LEFT JOIN env_readings e ON e.id = (
                 SELECT id FROM env_readings
                 WHERE device_id = d.id
+                ORDER BY recorded_at DESC LIMIT 1
+            )
+            LEFT JOIN env_weather w ON w.id = (
+                SELECT id FROM env_weather
+                WHERE barn_id = b.id
                 ORDER BY recorded_at DESC LIMIT 1
             )
             LEFT JOIN cycles c ON c.barn_id = b.id AND c.status = 'active'
@@ -90,8 +95,7 @@ class EnvController
                     DATE_FORMAT(recorded_at, '%H:%i') as time_label,
                     recorded_at,
                     temperature, humidity, heat_index,
-                    nh3_ppm, co2_ppm, light_lux,
-                    wind_speed_ms, is_raining, day_age
+                    nh3_ppm, co2_ppm, light_lux, day_age
                 FROM env_readings
                 WHERE device_id = :did
                   AND recorded_at >= NOW() - INTERVAL 24 HOUR
@@ -139,6 +143,13 @@ class EnvController
             $latest->execute([':did' => $device['id']]);
             $latest = $latest->fetch(PDO::FETCH_ASSOC);
         }
+
+        // Latest weather (từ trạm thời tiết riêng, nếu có)
+        $weather = $this->pdo->prepare("
+            SELECT * FROM env_weather WHERE barn_id=:bid ORDER BY recorded_at DESC LIMIT 1
+        ");
+        $weather->execute([':bid' => $barn_id]);
+        $weather = $weather->fetch(PDO::FETCH_ASSOC) ?: null;
 
         require view_path('env/env_barn.php');
     }

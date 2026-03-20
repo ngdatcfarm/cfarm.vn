@@ -71,9 +71,9 @@ $cards = [
     ['icon'=>'💧','label'=>'Độ ẩm',     'val'=> $latest['humidity']    ? $latest['humidity'].'%'    : '—',  'sub'=>''],
     ['icon'=>'☁️','label'=>'NH3',        'val'=> $latest['nh3_ppm']     ? $latest['nh3_ppm'].'ppm'  : '—',  'sub'=>'ngưỡng 25ppm'],
     ['icon'=>'🌫️','label'=>'CO2',        'val'=> $latest['co2_ppm']     ? $latest['co2_ppm'].'ppm'  : '—',  'sub'=>'ngưỡng 3000ppm'],
-    ['icon'=>'💨','label'=>'Gió',        'val'=> $latest['wind_speed_ms'] ? $latest['wind_speed_ms'].'m/s' : '—', 'sub'=>''],
+    ['icon'=>'💨','label'=>'Gió',        'val'=> ($weather['wind_speed_ms'] ?? null) ? $weather['wind_speed_ms'].'m/s' : '—', 'sub'=> $weather ? '' : 'chưa có trạm'],
     ['icon'=>'☀️','label'=>'Ánh sáng',   'val'=> $latest['light_lux']   ? number_format($latest['light_lux']).'lux' : '—', 'sub'=>''],
-    ['icon'=>'🌧️','label'=>'Mưa',        'val'=> $latest['is_raining']===null ? '—' : ($latest['is_raining'] ? 'Đang mưa' : 'Không mưa'), 'sub'=>''],
+    ['icon'=>'🌧️','label'=>'Mưa',        'val'=> ($weather['is_raining'] ?? null)===null ? '—' : ($weather['is_raining'] ? 'Đang mưa' : 'Không mưa'), 'sub'=> $weather ? '' : 'chưa có trạm'],
     ['icon'=>'🕐','label'=>'Cập nhật',   'val'=> date('H:i', strtotime($latest['recorded_at'])), 'sub'=> date('d/m', strtotime($latest['recorded_at']))],
 ];
 foreach ($cards as $c): ?>

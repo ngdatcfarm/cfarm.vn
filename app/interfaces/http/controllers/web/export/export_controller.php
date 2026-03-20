@@ -200,8 +200,6 @@ class ExportController
                 e.nh3_ppm,
                 e.co2_ppm,
                 e.light_lux,
-                e.wind_speed_ms,
-                e.is_raining,
                 e.mq_warmup,
                 d.wifi_rssi,
                 d.firmware_version
@@ -296,10 +294,17 @@ class ExportController
 
             $env = $this->pdo->prepare("
                 SELECT recorded_at, day_age, temperature, humidity, heat_index,
-                       nh3_ppm, co2_ppm, light_lux, wind_speed_ms, is_raining, mq_warmup
+                       nh3_ppm, co2_ppm, light_lux, mq_warmup
                 FROM env_readings WHERE cycle_id=:id ORDER BY recorded_at
             ");
             $env->execute([':id' => $c->id]);
+
+            $weather = $this->pdo->prepare("
+                SELECT recorded_at, day_age, wind_speed_ms, wind_direction_deg,
+                       is_raining, rainfall_mm, outdoor_temp, outdoor_humidity
+                FROM env_weather WHERE cycle_id=:id ORDER BY recorded_at
+            ");
+            $weather->execute([':id' => $c->id]);
 
             $result[] = [
                 'cycle'        => $c,
@@ -308,6 +313,7 @@ class ExportController
                 'deaths'       => $deaths->fetchAll(PDO::FETCH_OBJ),
                 'sales'        => $sales->fetchAll(PDO::FETCH_OBJ),
                 'env_readings' => $env->fetchAll(PDO::FETCH_OBJ),
+                'env_weather'  => $weather->fetchAll(PDO::FETCH_OBJ),
             ];
         }
         return $result;
