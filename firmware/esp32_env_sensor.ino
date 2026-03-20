@@ -100,14 +100,14 @@ unsigned long lastWifiRetry = 0;
 unsigned long lastMqttRetry = 0;
 unsigned long bootTime      = 0;
 
-// Du lieu cam bien moi nhat
-float lastTemp     = 0;
-float lastHumidity = 0;
-float lastLux      = 0;
-float lastNH3_ppm  = 0;
-float lastCO2_ppm  = 0;
-int   lastMQ137raw = 0;
-int   lastMQ135raw = 0;
+// Du lieu cam bien moi nhat (NAN = chua doc duoc / khong co sensor)
+float lastTemp     = NAN;
+float lastHumidity = NAN;
+float lastLux      = NAN;
+float lastNH3_ppm  = NAN;
+float lastCO2_ppm  = NAN;
+int   lastMQ137raw = -1;
+int   lastMQ135raw = -1;
 int   envSendCount = 0;
 
 char topicCmd[64];
@@ -311,18 +311,28 @@ void readAndSendEnv() {
     }
 
     // MQ sensors (chi doc sau warm-up)
+    // ADC floating (khong cam sensor) thuong doc ~0 hoac >4000 (nhieu)
+    // Sensor that: raw 100-3900 khi co tai (dien tro heater keo dong)
     if (warmup_done) {
         // MQ137 - NH3
         lastMQ137raw = readADCAvg(MQ137_PIN);
-        // Tham so a=102.2, b=-2.473 tu datasheet MQ137 cho NH3
-        lastNH3_ppm = calcMQppm(lastMQ137raw, MQ137_R0, 102.2, -2.473);
-        Serial.printf("[MQ137] Raw=%d  NH3=%.1f ppm\n", lastMQ137raw, lastNH3_ppm);
+        if (lastMQ137raw >= 100 && lastMQ137raw <= 3900) {
+            lastNH3_ppm = calcMQppm(lastMQ137raw, MQ137_R0, 102.2, -2.473);
+            Serial.printf("[MQ137] Raw=%d  NH3=%.1f ppm\n", lastMQ137raw, lastNH3_ppm);
+        } else {
+            lastNH3_ppm = NAN;
+            Serial.printf("[MQ137] Raw=%d — khong co sensor (floating)\n", lastMQ137raw);
+        }
 
         // MQ135 - CO2
         lastMQ135raw = readADCAvg(MQ135_PIN);
-        // Tham so a=116.602, b=-2.769 tu datasheet MQ135 cho CO2
-        lastCO2_ppm = calcMQppm(lastMQ135raw, MQ135_R0, 116.602, -2.769);
-        Serial.printf("[MQ135] Raw=%d  CO2=%.1f ppm\n", lastMQ135raw, lastCO2_ppm);
+        if (lastMQ135raw >= 100 && lastMQ135raw <= 3900) {
+            lastCO2_ppm = calcMQppm(lastMQ135raw, MQ135_R0, 116.602, -2.769);
+            Serial.printf("[MQ135] Raw=%d  CO2=%.1f ppm\n", lastMQ135raw, lastCO2_ppm);
+        } else {
+            lastCO2_ppm = NAN;
+            Serial.printf("[MQ135] Raw=%d — khong co sensor (floating)\n", lastMQ135raw);
+        }
     } else {
         Serial.println("[MQ] Dang warm-up, bo qua...");
     }
@@ -335,22 +345,33 @@ void readAndSendEnv() {
 
     envSendCount++;
 
+    // Dung ArduinoJson de xu ly null dung cach
+    StaticJsonDocument<384> doc;
+    doc["device"] = DEVICE_CODE;
+
+    // SHT40: null neu khong co sensor
+    if (!isnan(lastTemp))     doc["temp"] = serialized(String(lastTemp, 1));
+    else                      doc["temp"] = (char*)NULL;
+    if (!isnan(lastHumidity)) doc["humidity"] = serialized(String(lastHumidity, 1));
+    else                      doc["humidity"] = (char*)NULL;
+
+    // BH1750: null neu khong co sensor
+    if (!isnan(lastLux))      doc["lux"] = serialized(String(lastLux, 1));
+    else                      doc["lux"] = (char*)NULL;
+
+    // MQ sensors: null neu khong cam hoac chua warm-up
+    if (!isnan(lastNH3_ppm))  doc["nh3_ppm"] = serialized(String(lastNH3_ppm, 1));
+    else                      doc["nh3_ppm"] = (char*)NULL;
+    if (!isnan(lastCO2_ppm))  doc["co2_ppm"] = serialized(String(lastCO2_ppm, 1));
+    else                      doc["co2_ppm"] = (char*)NULL;
+
+    doc["mq137_raw"] = (lastMQ137raw >= 0) ? lastMQ137raw : 0;
+    doc["mq135_raw"] = (lastMQ135raw >= 0) ? lastMQ135raw : 0;
+    doc["warmup"]    = warmup_done;
+    doc["seq"]       = envSendCount;
+
     char buf[384];
-    snprintf(buf, sizeof(buf),
-        "{\"device\":\"%s\","
-        "\"temp\":%.1f,\"humidity\":%.1f,"
-        "\"lux\":%.1f,"
-        "\"nh3_ppm\":%.1f,\"co2_ppm\":%.1f,"
-        "\"mq137_raw\":%d,\"mq135_raw\":%d,"
-        "\"warmup\":%s,"
-        "\"seq\":%d}",
-        DEVICE_CODE,
-        lastTemp, lastHumidity,
-        lastLux,
-        lastNH3_ppm, lastCO2_ppm,
-        lastMQ137raw, lastMQ135raw,
-        warmup_done ? "true" : "false",
-        envSendCount);
+    serializeJson(doc, buf, sizeof(buf));
 
     if (mqtt.publish(topicEnv, buf, false)) {
         Serial.printf("[ENV] >>> Da gui (#%d)\n", envSendCount);
