@@ -244,14 +244,34 @@ void loop() {
 
 /**
  * Doc ADC nhieu lan va lay trung binh (loc nhieu)
+ * Tra ve variance qua pointer (de phat hien chan floating)
  */
-int readADCAvg(int pin) {
+int readADCAvg(int pin, float* outVariance = nullptr) {
     long sum = 0;
+    long sumSq = 0;
     for (int i = 0; i < ADC_SAMPLES; i++) {
-        sum += analogRead(pin);
+        int val = analogRead(pin);
+        sum += val;
+        sumSq += (long)val * val;
         delay(ADC_SAMPLE_DELAY_MS);
     }
-    return (int)(sum / ADC_SAMPLES);
+    int avg = (int)(sum / ADC_SAMPLES);
+    if (outVariance) {
+        // Variance = E[X^2] - (E[X])^2
+        *outVariance = (float)(sumSq / ADC_SAMPLES) - (float)avg * avg;
+    }
+    return avg;
+}
+
+/**
+ * Kiem tra ADC co phai chan floating (khong cam sensor)
+ * Chan floating: variance cao (noise), sensor that: variance thap (on dinh)
+ * Nguong 5000: sensor that thuong < 1000, floating thuong > 10000
+ */
+bool isADCFloating(int pin) {
+    float variance = 0;
+    readADCAvg(pin, &variance);
+    return (variance > 5000);
 }
 
 /**
@@ -295,8 +315,14 @@ void readAndSendEnv() {
             lastHumidity = hum.relative_humidity;
             Serial.printf("[SHT40] Temp=%.1f°C  Hum=%.1f%%\n", lastTemp, lastHumidity);
         } else {
-            Serial.println("[SHT40] !!! Doc loi");
+            // Doc loi → reset ve NAN (tranh gui gia tri cu/stale)
+            lastTemp = NAN;
+            lastHumidity = NAN;
+            Serial.println("[SHT40] !!! Doc loi — reset NAN");
         }
+    } else {
+        lastTemp = NAN;
+        lastHumidity = NAN;
     }
 
     // BH1750: Anh sang
@@ -306,32 +332,43 @@ void readAndSendEnv() {
             lastLux = lux;
             Serial.printf("[BH1750] Lux=%.1f\n", lastLux);
         } else {
-            Serial.println("[BH1750] !!! Doc loi");
+            lastLux = NAN;
+            Serial.println("[BH1750] !!! Doc loi — reset NAN");
         }
+    } else {
+        lastLux = NAN;
     }
 
     // MQ sensors (chi doc sau warm-up)
-    // ADC floating (khong cam sensor) thuong doc ~0 hoac >4000 (nhieu)
-    // Sensor that: raw 100-3900 khi co tai (dien tro heater keo dong)
+    // Phat hien chan floating bang variance: sensor that = on dinh, floating = noise cao
     if (warmup_done) {
         // MQ137 - NH3
-        lastMQ137raw = readADCAvg(MQ137_PIN);
-        if (lastMQ137raw >= 100 && lastMQ137raw <= 3900) {
+        float var137 = 0;
+        lastMQ137raw = readADCAvg(MQ137_PIN, &var137);
+        if (var137 > 5000) {
+            // Chan floating (variance qua cao) = khong cam sensor
+            lastNH3_ppm = NAN;
+            Serial.printf("[MQ137] Raw=%d var=%.0f — FLOATING (khong co sensor)\n", lastMQ137raw, var137);
+        } else if (lastMQ137raw >= 100 && lastMQ137raw <= 3900) {
             lastNH3_ppm = calcMQppm(lastMQ137raw, MQ137_R0, 102.2, -2.473);
-            Serial.printf("[MQ137] Raw=%d  NH3=%.1f ppm\n", lastMQ137raw, lastNH3_ppm);
+            Serial.printf("[MQ137] Raw=%d var=%.0f NH3=%.1f ppm\n", lastMQ137raw, var137, lastNH3_ppm);
         } else {
             lastNH3_ppm = NAN;
-            Serial.printf("[MQ137] Raw=%d — khong co sensor (floating)\n", lastMQ137raw);
+            Serial.printf("[MQ137] Raw=%d var=%.0f — ngoai range\n", lastMQ137raw, var137);
         }
 
         // MQ135 - CO2
-        lastMQ135raw = readADCAvg(MQ135_PIN);
-        if (lastMQ135raw >= 100 && lastMQ135raw <= 3900) {
+        float var135 = 0;
+        lastMQ135raw = readADCAvg(MQ135_PIN, &var135);
+        if (var135 > 5000) {
+            lastCO2_ppm = NAN;
+            Serial.printf("[MQ135] Raw=%d var=%.0f — FLOATING (khong co sensor)\n", lastMQ135raw, var135);
+        } else if (lastMQ135raw >= 100 && lastMQ135raw <= 3900) {
             lastCO2_ppm = calcMQppm(lastMQ135raw, MQ135_R0, 116.602, -2.769);
-            Serial.printf("[MQ135] Raw=%d  CO2=%.1f ppm\n", lastMQ135raw, lastCO2_ppm);
+            Serial.printf("[MQ135] Raw=%d var=%.0f CO2=%.1f ppm\n", lastMQ135raw, var135, lastCO2_ppm);
         } else {
             lastCO2_ppm = NAN;
-            Serial.printf("[MQ135] Raw=%d — khong co sensor (floating)\n", lastMQ135raw);
+            Serial.printf("[MQ135] Raw=%d var=%.0f — ngoai range\n", lastMQ135raw, var135);
         }
     } else {
         Serial.println("[MQ] Dang warm-up, bo qua...");
