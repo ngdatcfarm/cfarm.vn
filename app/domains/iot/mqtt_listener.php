@@ -230,13 +230,11 @@ function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message):
             INSERT INTO env_readings
                 (device_id, barn_id, cycle_id, day_age,
                  temperature, humidity, heat_index, light_lux,
-                 nh3_ppm, mq137_raw, co2_ppm, mq135_raw,
-                 mq_warmup, recorded_at)
+                 nh3_ppm, co2_ppm, recorded_at)
             VALUES
                 (:device_id, :barn_id, :cycle_id, :day_age,
                  :temp, :humidity, :heat_index, :lux,
-                 :nh3, :mq137_raw, :co2, :mq135_raw,
-                 :warmup, NOW())
+                 :nh3, :co2, NOW())
         ")->execute([
             ':device_id'   => $deviceId,
             ':barn_id'     => $barnId,
@@ -247,10 +245,7 @@ function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message):
             ':heat_index'  => $heatIndex,
             ':lux'         => $data['lux'] ?? null,
             ':nh3'         => $data['nh3_ppm'] ?? null,
-            ':mq137_raw'   => $data['mq137_raw'] ?? null,
             ':co2'         => $data['co2_ppm'] ?? null,
-            ':mq135_raw'   => $data['mq135_raw'] ?? null,
-            ':warmup'      => ($data['warmup'] ?? false) ? 1 : 0,
         ]);
     } catch (PDOException $e) {
         logMsg("ENV [{$device['device_code']}] INSERT FAILED: " . $e->getMessage());
