@@ -74,6 +74,14 @@ class PushController
         ");
         $stmt->execute([':type' => $type]);
 
+        // DEVICE_OFFLINE: đánh dấu trên devices để dừng alert (có hiệu lực đến khi device online lại)
+        if ($type === 'DEVICE_OFFLINE') {
+            $this->pdo->exec("
+                UPDATE devices SET last_offline_alert_at = NOW()
+                WHERE is_online = 0 AND alert_offline = 1
+            ");
+        }
+
         $this->json(true, 'Đã xác nhận', ['updated' => $stmt->rowCount()]);
     }
 

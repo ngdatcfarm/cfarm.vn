@@ -149,7 +149,8 @@ function handleHeartbeat(PDO $pdo, int $deviceId, string $message): void
             ip_address          = :ip,
             uptime_seconds      = :uptime,
             free_heap_bytes     = :heap,
-            ping_fail_count     = 0
+            ping_fail_count     = 0,
+            last_offline_alert_at = NULL
         WHERE id = :id
     ")->execute([
         ':rssi'   => $data['wifi_rssi'] ?? $data['rssi'] ?? null,
@@ -178,7 +179,8 @@ function handlePong(PDO $pdo, int $deviceId): void
         UPDATE devices SET
             is_online = 1,
             last_heartbeat_at = NOW(),
-            ping_fail_count = 0
+            ping_fail_count = 0,
+            last_offline_alert_at = NULL
         WHERE id = ?
     ")->execute([$deviceId]);
 }
@@ -255,7 +257,7 @@ function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message):
 
     // Cập nhật device online status
     $pdo->prepare("
-        UPDATE devices SET is_online = 1, last_heartbeat_at = NOW(), ping_fail_count = 0
+        UPDATE devices SET is_online = 1, last_heartbeat_at = NOW(), ping_fail_count = 0, last_offline_alert_at = NULL
         WHERE id = ?
     ")->execute([$deviceId]);
 

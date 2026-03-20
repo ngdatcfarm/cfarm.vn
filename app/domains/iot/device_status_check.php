@@ -30,16 +30,17 @@ if ($count > 0) {
     echo "[" . date('Y-m-d H:i:s') . "] Marked {$count} device(s) as OFFLINE\n";
 }
 
-// 2. Gửi push notification cho devices đang offline mà chưa được acknowledged
+// 2. Gửi push notification cho devices đang offline mà chưa acknowledged
 $offline_devices = $pdo->query("
     SELECT d.id, d.device_code, d.name, d.last_heartbeat_at,
-           d.alert_offline, d.last_offline_alert_at,
+           d.last_offline_alert_at,
            b.name AS barn_name
     FROM devices d
     LEFT JOIN barns b ON d.barn_id = b.id
     WHERE d.is_online = 0
       AND d.alert_offline = 1
       AND d.last_heartbeat_at IS NOT NULL
+      AND d.last_offline_alert_at IS NULL
 ")->fetchAll();
 
 if (empty($offline_devices)) exit;
@@ -47,38 +48,6 @@ if (empty($offline_devices)) exit;
 $push = new PushService($pdo);
 
 foreach ($offline_devices as $dev) {
-    // Kiểm tra đã có notification DEVICE_OFFLINE chưa acknowledged trong 1 phút qua chưa
-    $recent = $pdo->prepare("
-        SELECT id FROM push_notifications_log
-        WHERE type = 'DEVICE_OFFLINE'
-          AND body LIKE :device_match
-          AND acknowledged_at IS NULL
-          AND sent_at > DATE_SUB(NOW(), INTERVAL 1 MINUTE)
-        LIMIT 1
-    ");
-    $recent->execute([':device_match' => '%' . $dev['device_code'] . '%']);
-
-    if ($recent->fetch()) {
-        // Đã gửi trong vòng 1 phút và chưa acknowledged → skip
-        continue;
-    }
-
-    // Kiểm tra đã acknowledged rồi thì không gửi nữa
-    $acked = $pdo->prepare("
-        SELECT id FROM push_notifications_log
-        WHERE type = 'DEVICE_OFFLINE'
-          AND body LIKE :device_match
-          AND acknowledged_at IS NOT NULL
-          AND sent_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-        LIMIT 1
-    ");
-    $acked->execute([':device_match' => '%' . $dev['device_code'] . '%']);
-
-    if ($acked->fetch()) {
-        // Đã acknowledged trong 24h → không spam nữa
-        continue;
-    }
-
     // Tính thời gian offline
     $offline_secs = time() - strtotime($dev['last_heartbeat_at']);
     if ($offline_secs < OFFLINE_TIMEOUT) continue;
