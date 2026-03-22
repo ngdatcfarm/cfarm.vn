@@ -1254,6 +1254,15 @@ async function postCareInline(url, data, error_el_id) {
         });
         const json = await res.json();
         if (!json.ok) {
+            // Anomaly warning: cho user confirm để gửi lại
+            if (json.need_confirm) {
+                const msg = (json.warnings || [json.message]).join('\n') + '\n\nBạn có muốn tiếp tục lưu?';
+                if (confirm(msg)) {
+                    data.confirmed = '1';
+                    return postCareInline(url, data, error_el_id);
+                }
+                return false;
+            }
             if (el) { el.textContent = json.message; el.classList.remove('hidden'); }
             return false;
         }

@@ -8,6 +8,7 @@ use App\Domains\Care\Usecases\RecordMedicationUsecase;
 use App\Domains\Care\Usecases\RecordSaleUsecase;
 use App\Domains\Care\Usecases\RecordTroughCheckUsecase;
 use App\Domains\Care\Services\CareEditPermission;
+use App\Domains\Care\Services\CareAnomalyDetector;
 use App\Infrastructure\Persistence\Mysql\Repositories\CareRepository;
 use App\Infrastructure\Persistence\Mysql\Repositories\CycleRepository;
 use App\Infrastructure\Persistence\Mysql\Repositories\FeedTypeRepository;
@@ -59,8 +60,25 @@ class CareController
     public function store_feed(array $vars): void
     {
         try {
-            // KIỂM TRA: Cycle phải có feed_program đang active
             $cycle_id = (int)$_POST['cycle_id'];
+
+            // Anomaly detection (skip nếu user đã confirm)
+            if (empty($_POST['confirmed'])) {
+                $detector = new CareAnomalyDetector($this->pdo);
+                $warnings = $detector->check_feed(
+                    $cycle_id,
+                    (int)$_POST['feed_type_id'],
+                    (float)$_POST['bags'],
+                    $_POST['session'] ?? 'morning',
+                    $_POST['recorded_at'] ?? date('Y-m-d H:i:s')
+                );
+                if (!empty($warnings)) {
+                    $this->json(false, implode("\n", $warnings), ['need_confirm' => true, 'warnings' => $warnings]);
+                    return;
+                }
+            }
+
+            // KIỂM TRA: Cycle phải có feed_program đang active
             $stmt = $this->pdo->prepare("
                 SELECT COUNT(*) FROM cycle_feed_programs
                 WHERE cycle_id = :cycle_id AND end_date IS NULL
@@ -70,21 +88,21 @@ class CareController
                 throw new \InvalidArgumentException('Cycle chưa cài đặt hãng cám. Vui lòng cài đặt trước khi ghi cho ăn.');
             }
 
-            // KIỂM TRA TỒN KHO TRƯỚC KHI LƯU (quan trọng!)
+            // KIỂM TRA TỒN KHO TRƯỚC KHI LƯU
             $stock_svc = new \App\Domains\Inventory\Services\InventoryStockService($this->pdo);
-            $stock_svc->check_feed_stock((int)$_POST['cycle_id'], (int)$_POST['feed_type_id'], (float)$_POST['bags']);
+            $stock_svc->check_feed_stock($cycle_id, (int)$_POST['feed_type_id'], (float)$_POST['bags']);
 
-            // CHỈ LƯU SAU KHI KIỂM TRA TỒN KHO THÀNH CÔNG
+            // LƯU
             $usecase = new RecordFeedUsecase(
                 $this->care_repository,
                 new FeedTypeRepository($this->pdo),
                 $this->cycle_repository
             );
             $id = $usecase->execute($cycle_id, $_POST);
-            $this->trigger_snapshot((int)$_POST['cycle_id'], $_POST['recorded_at'] ?? null);
+            $this->trigger_snapshot($cycle_id, $_POST['recorded_at'] ?? null);
 
-            // AUTO DEDUCT INVENTORY (sau khi đã lưu thành công)
-            $stock_svc->deduct_feed($id, (int)$_POST['cycle_id'], (int)$_POST['feed_type_id'], (float)$_POST['bags']);
+            // AUTO DEDUCT INVENTORY
+            $stock_svc->deduct_feed($id, $cycle_id, (int)$_POST['feed_type_id'], (float)$_POST['bags']);
 
             $this->json(true, 'Đã ghi chép cho ăn', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {
@@ -98,9 +116,25 @@ class CareController
     public function store_death(array $vars): void
     {
         try {
+            $cycle_id = (int)$_POST['cycle_id'];
+
+            // Anomaly detection
+            if (empty($_POST['confirmed'])) {
+                $detector = new CareAnomalyDetector($this->pdo);
+                $warnings = $detector->check_death(
+                    $cycle_id,
+                    (int)($_POST['quantity'] ?? 0),
+                    $_POST['recorded_at'] ?? date('Y-m-d H:i:s')
+                );
+                if (!empty($warnings)) {
+                    $this->json(false, implode("\n", $warnings), ['need_confirm' => true, 'warnings' => $warnings]);
+                    return;
+                }
+            }
+
             $usecase = new RecordDeathUsecase($this->care_repository, $this->cycle_repository);
-            $id = $usecase->execute((int)$_POST['cycle_id'], $_POST);
-            $this->trigger_snapshot((int)$_POST['cycle_id'], $_POST['recorded_at'] ?? null);
+            $id = $usecase->execute($cycle_id, $_POST);
+            $this->trigger_snapshot($cycle_id, $_POST['recorded_at'] ?? null);
             $this->json(true, 'Đã ghi chép hao hụt', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {
             $this->json(false, $e->getMessage());
@@ -126,8 +160,20 @@ class CareController
     public function store_sale(array $vars): void
     {
         try {
+            $cycle_id = (int)$_POST['cycle_id'];
+
+            // Duplicate detection
+            if (empty($_POST['confirmed'])) {
+                $detector = new CareAnomalyDetector($this->pdo);
+                $warnings = $detector->check_sale($cycle_id, $_POST['recorded_at'] ?? date('Y-m-d H:i:s'));
+                if (!empty($warnings)) {
+                    $this->json(false, implode("\n", $warnings), ['need_confirm' => true, 'warnings' => $warnings]);
+                    return;
+                }
+            }
+
             $usecase = new RecordSaleUsecase($this->care_repository, $this->cycle_repository);
-            $id = $usecase->execute((int)$_POST['cycle_id'], $_POST);
+            $id = $usecase->execute($cycle_id, $_POST);
             $this->trigger_snapshot((int)$_POST['cycle_id'], $_POST['recorded_at'] ?? null);
             $this->json(true, 'Đã ghi chép bán gà', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {
