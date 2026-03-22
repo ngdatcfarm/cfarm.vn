@@ -18,11 +18,16 @@
     </div>
 
     <!-- Shortcuts -->
-    <div class="grid grid-cols-4 gap-2 mb-5">
+    <div class="grid grid-cols-5 gap-2 mb-5">
         <a href="/events/create<?= !empty($active_cycles) ? '?cycle_id='.$active_cycles[0]['id'] : '' ?>"
            class="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3 text-center active:scale-95 transition-transform">
             <div class="text-2xl mb-1">📋</div>
             <div class="text-xs font-semibold text-blue-700 dark:text-blue-300">Ghi chép</div>
+        </a>
+        <a href="/barns"
+           class="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-3 text-center active:scale-95 transition-transform">
+            <div class="text-2xl mb-1">🏠</div>
+            <div class="text-xs font-semibold text-amber-700 dark:text-amber-300">Chuồng</div>
         </a>
         <a href="/reports"
            class="bg-purple-50 dark:bg-purple-900/20 rounded-2xl p-3 text-center active:scale-95 transition-transform">
