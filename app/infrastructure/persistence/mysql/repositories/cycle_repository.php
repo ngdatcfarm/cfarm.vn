@@ -173,6 +173,32 @@ class CycleRepository implements CycleRepositoryInterface
         ]);
     }
 
+    public function reconcile_quantity(int $id): int
+    {
+        // Tính current_quantity = initial - tổng chết - tổng bán - tổng tách đàn
+        $stmt = $this->pdo->prepare("
+            SELECT
+                c.initial_quantity,
+                COALESCE((SELECT SUM(quantity) FROM care_deaths WHERE cycle_id = c.id), 0) AS total_dead,
+                COALESCE((SELECT SUM(quantity) FROM care_sales WHERE cycle_id = c.id AND quantity IS NOT NULL), 0) AS total_sold,
+                COALESCE((SELECT SUM(cs.quantity) FROM cycle_splits cs WHERE cs.from_cycle_id = c.id), 0) AS total_split
+            FROM cycles c
+            WHERE c.id = :id
+        ");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        if (!$row) return 0;
+
+        $correct = (int)$row['initial_quantity'] - (int)$row['total_dead'] - (int)$row['total_sold'] - (int)$row['total_split'];
+        $correct = max(0, $correct);
+
+        $this->pdo->prepare("UPDATE cycles SET current_quantity = :qty WHERE id = :id")
+            ->execute([':qty' => $correct, ':id' => $id]);
+
+        return $correct;
+    }
+
     private function map(array $row): Cycle
     {
         return new Cycle(

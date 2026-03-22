@@ -9,6 +9,7 @@ namespace App\Domains\Care\Usecases;
 use App\Domains\Care\Contracts\CareRepositoryInterface;
 use App\Domains\Care\Entities\CareMedication;
 use App\Domains\Cycle\Contracts\CycleRepositoryInterface;
+use App\Domains\Care\Services\RecordedAtValidator;
 use InvalidArgumentException;
 
 class RecordMedicationUsecase
@@ -24,6 +25,8 @@ class RecordMedicationUsecase
         if (!$cycle || !$cycle->is_active()) {
             throw new InvalidArgumentException('Cycle không hợp lệ hoặc đã đóng');
         }
+
+        RecordedAtValidator::validate($input['recorded_at'] ?? null, $cycle);
 
         if (empty($input['medication_name'])) {
             throw new InvalidArgumentException('Thiếu tên thuốc');

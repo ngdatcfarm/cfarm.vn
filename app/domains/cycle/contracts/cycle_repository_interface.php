@@ -40,4 +40,7 @@ interface CycleRepositoryInterface
 
     // Close cycle — ghi nhận kết quả
     public function close(int $id, array $result): void;
+
+    // Tính lại current_quantity từ dữ liệu gốc (chống drift)
+    public function reconcile_quantity(int $id): int;
 }

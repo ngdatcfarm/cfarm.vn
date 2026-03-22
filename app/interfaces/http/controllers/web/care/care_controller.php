@@ -454,6 +454,35 @@ class CareController
         }
         $old_qty = (int)$row['quantity'];
         $new_qty = (int)($_POST['quantity'] ?? $row['quantity']);
+
+        // Validation: quantity > 0
+        if ($new_qty <= 0) {
+            $this->json(false, 'Số con chết phải lớn hơn 0');
+            return;
+        }
+
+        // Validation: không được >= current_quantity (tính lại sau khi hoàn old)
+        $cycle = $this->cycle_repository->find_by_id((int)$row['cycle_id']);
+        $available = $cycle->current_quantity + $old_qty; // hoàn lại cũ
+        if ($new_qty >= $available) {
+            $this->json(false, "Số con chết ({$new_qty}) không thể >= số con hiện tại ({$available})");
+            return;
+        }
+
+        // Validation: recorded_at hợp lệ
+        $recorded_at = $_POST['recorded_at'] ?? $row['recorded_at'];
+        if ($recorded_at && $cycle) {
+            $rec_date = substr($recorded_at, 0, 10);
+            if ($rec_date < $cycle->start_date) {
+                $this->json(false, 'Ngày ghi không thể trước ngày bắt đầu chu kỳ');
+                return;
+            }
+            if ($rec_date > date('Y-m-d')) {
+                $this->json(false, 'Ngày ghi không thể ở tương lai');
+                return;
+            }
+        }
+
         $this->pdo->prepare("
             UPDATE care_deaths SET quantity=:q, reason=:r, symptoms=:s, note=:n, recorded_at=:rat WHERE id=:id
         ")->execute([
@@ -461,7 +490,7 @@ class CareController
             ':r'   => $_POST['reason']   ?? $row['reason'],
             ':s'   => $_POST['symptoms'] ?? $row['symptoms'],
             ':n'   => $_POST['note']     ?? $row['note'],
-            ':rat' => $_POST['recorded_at'] ?? $row['recorded_at'],
+            ':rat' => $recorded_at,
             ':id'  => $id,
         ]);
         // Điều chỉnh current_quantity: cũ trừ 10, mới trừ 3 → cộng lại 7
@@ -471,7 +500,7 @@ class CareController
                 UPDATE cycles SET current_quantity = current_quantity + :diff WHERE id = :cid
             ")->execute([':diff' => $diff, ':cid' => (int)$row['cycle_id']]);
         }
-        $this->trigger_snapshot((int)$row['cycle_id'], $_POST['recorded_at'] ?? $row['recorded_at']);
+        $this->trigger_snapshot((int)$row['cycle_id'], $recorded_at);
         $this->json(true, 'Đã cập nhật');
     }
 
@@ -516,6 +545,32 @@ class CareController
         $price   = (float)($_POST['price_per_kg'] ?? $row['price_per_kg']);
         $old_qty = (int)($row['quantity'] ?? 0);
         $new_qty = (int)($_POST['quantity'] ?? $row['quantity'] ?? 0);
+
+        // Validation
+        if ($weight <= 0) { $this->json(false, 'Tổng cân nặng phải lớn hơn 0'); return; }
+        if ($price <= 0)  { $this->json(false, 'Giá/kg phải lớn hơn 0'); return; }
+
+        if ($new_qty > 0) {
+            $cycle = $this->cycle_repository->find_by_id((int)$row['cycle_id']);
+            $available = $cycle->current_quantity + $old_qty;
+            if ($new_qty > $available) {
+                $this->json(false, "Số con bán ({$new_qty}) lớn hơn số con hiện tại ({$available})");
+                return;
+            }
+        }
+
+        $recorded_at = $_POST['recorded_at'] ?? $row['recorded_at'];
+        if ($recorded_at) {
+            $rec_date = substr($recorded_at, 0, 10);
+            $cycle ??= $this->cycle_repository->find_by_id((int)$row['cycle_id']);
+            if ($cycle && $rec_date < $cycle->start_date) {
+                $this->json(false, 'Ngày ghi không thể trước ngày bắt đầu chu kỳ'); return;
+            }
+            if ($rec_date > date('Y-m-d')) {
+                $this->json(false, 'Ngày ghi không thể ở tương lai'); return;
+            }
+        }
+
         $this->pdo->prepare("
             UPDATE care_sales SET weight_kg=:w, price_per_kg=:p, total_amount=:t,
             quantity=:q, gender=:g, note=:n, recorded_at=:rat WHERE id=:id
@@ -526,7 +581,7 @@ class CareController
             ':q'   => $new_qty ?: null,
             ':g'   => $_POST['gender']   ?? $row['gender'],
             ':n'   => $_POST['note']     ?? $row['note'],
-            ':rat' => $_POST['recorded_at'] ?? $row['recorded_at'],
+            ':rat' => $recorded_at,
             ':id'  => $id,
         ]);
         // Điều chỉnh current_quantity nếu số con thay đổi
