@@ -60,8 +60,14 @@ $dispatcher = FastRoute\simpleDispatcher(function (RouteCollector $r) {
 // --- auth check ---
 require_once ROOT_PATH . '/app/shared/auth/auth.php';
 $public_routes = ['/login', '/logout'];
+// API sync endpoints dùng Bearer token riêng, không cần session auth
+$api_prefixes = ['/api/sync/'];
 $current_path  = strtok($_SERVER['REQUEST_URI'], '?');
-if (!in_array($current_path, $public_routes) && !auth_check($pdo)) {
+$is_api_route = false;
+foreach ($api_prefixes as $prefix) {
+    if (str_starts_with($current_path, $prefix)) { $is_api_route = true; break; }
+}
+if (!$is_api_route && !in_array($current_path, $public_routes) && !auth_check($pdo)) {
     $_SESSION['intended_url'] = $_SERVER['REQUEST_URI'];
     header('Location: /login'); exit;
 }

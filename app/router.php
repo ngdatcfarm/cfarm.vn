@@ -308,3 +308,15 @@ $r->addRoute('POST', '/inventory/sales/{id:\d+}/delete',           [InventoryEdi
 $r->addRoute('GET',  '/settings/suppliers',                 [SupplierController::class,  'index']);
 $r->addRoute('POST', '/settings/suppliers',                 [SupplierController::class,  'store']);
 $r->addRoute('POST', '/settings/suppliers/{id:\d+}/update', [SupplierController::class,  'update']);
+
+// =============================================================================
+// SYNC API - Đồng bộ Local Server ↔ Cloud
+// =============================================================================
+use App\Interfaces\Http\Controllers\Web\Sync\SyncController;
+
+$r->addRoute('POST', '/api/sync/receive',       [SyncController::class, 'receive']);
+$r->addRoute('GET',  '/api/sync/changes',        [SyncController::class, 'changes']);
+$r->addRoute('POST', '/api/sync/sensor-data',    [SyncController::class, 'sensor_data']);
+$r->addRoute('POST', '/api/sync/device-states',  [SyncController::class, 'device_states']);
+$r->addRoute('POST', '/api/sync/command',        [SyncController::class, 'send_command']);
+$r->addRoute('GET',  '/api/sync/status',          [SyncController::class, 'status']);
