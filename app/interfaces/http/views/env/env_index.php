@@ -46,6 +46,11 @@ ob_start();
                 <?= htmlspecialchars($b['cycle_code']) ?> · ngày <?= $b['day_age'] ?>
             </span>
             <?php endif; ?>
+            <?php if (($b['sensor_count'] ?? 0) > 1): ?>
+            <span class="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                <?= $b['sensor_count'] ?> sensor
+            </span>
+            <?php endif; ?>
         </div>
         <div class="flex items-center gap-1.5">
             <?php if (!$has_data): ?>

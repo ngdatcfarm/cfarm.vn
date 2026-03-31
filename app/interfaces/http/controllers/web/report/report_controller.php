@@ -11,13 +11,16 @@ use PDO;
 
 class ReportController
 {
-    private CycleRepository  $cycle_repo;
-    private WeightRepository $weight_repo;
+    private CycleRepository    $cycle_repo;
+    private WeightRepository   $weight_repo;
+    private SnapshotService    $snapshot_svc;
+    private AlertService       $alert_svc;
+    private GrowthPredictionService $growth_svc;
 
     public function __construct(private PDO $pdo)
     {
-        $this->cycle_repo  = new CycleRepository($pdo);
-        $this->weight_repo = new WeightRepository($pdo);
+        $this->cycle_repo    = new CycleRepository($pdo);
+        $this->weight_repo   = new WeightRepository($pdo);
         $this->snapshot_svc  = new SnapshotService($pdo);
         $this->alert_svc     = new AlertService($pdo);
         $this->growth_svc    = new GrowthPredictionService($pdo);
@@ -81,8 +84,13 @@ class ReportController
         // Weight
         $weight_sessions = $this->weight_repo->find_sessions_with_gender_avg($cycle_id);
 
-        // ---- Trigger recalculate snapshot ----
-        $this->snapshot_svc->recalculate_cycle($cycle_id);
+        // ---- Incremental snapshot: chỉ tính từ snapshot cuối cùng đã có ----
+        $last_snap = $this->pdo->prepare("
+            SELECT MAX(day_age) FROM cycle_daily_snapshots WHERE cycle_id = :id
+        ");
+        $last_snap->execute([':id' => $cycle_id]);
+        $last_day = (int)$last_snap->fetchColumn();
+        $this->snapshot_svc->recalculate_from_day($cycle_id, max(1, $last_day));
 
         // ---- Load snapshots ----
         $snap_stmt = $this->pdo->prepare("

@@ -18,11 +18,16 @@
     </div>
 
     <!-- Shortcuts -->
-    <div class="grid grid-cols-4 gap-2 mb-5">
+    <div class="grid grid-cols-5 gap-2 mb-5">
         <a href="/events/create<?= !empty($active_cycles) ? '?cycle_id='.$active_cycles[0]['id'] : '' ?>"
            class="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3 text-center active:scale-95 transition-transform">
             <div class="text-2xl mb-1">📋</div>
             <div class="text-xs font-semibold text-blue-700 dark:text-blue-300">Ghi chép</div>
+        </a>
+        <a href="/barns"
+           class="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-3 text-center active:scale-95 transition-transform">
+            <div class="text-2xl mb-1">🏠</div>
+            <div class="text-xs font-semibold text-amber-700 dark:text-amber-300">Chuồng</div>
         </a>
         <a href="/reports"
            class="bg-purple-50 dark:bg-purple-900/20 rounded-2xl p-3 text-center active:scale-95 transition-transform">
@@ -41,6 +46,81 @@
         </a>
     </div>
 
+
+    <!-- Daily Checklist -->
+    <?php if (!empty($daily_checklist)): ?>
+    <div class="mb-5">
+        <div class="text-sm font-semibold mb-2">Hôm nay <?= date('d/m') ?></div>
+        <div class="space-y-2">
+        <?php foreach ($active_cycles as $c):
+            $cid = (int)$c['id'];
+            $cl = $daily_checklist[$cid] ?? null;
+            if (!$cl) continue;
+            $now_hour = (int)date('H');
+            $items = [];
+
+            // Sáng
+            if ($now_hour >= 6) {
+                $items[] = [
+                    'done' => $cl['has_morning_feed'],
+                    'label' => 'Cho ăn sáng',
+                    'icon' => '🌾',
+                ];
+            }
+            // Chiều
+            if ($now_hour >= 12) {
+                $items[] = [
+                    'done' => $cl['has_evening_feed'],
+                    'label' => 'Cho ăn chiều',
+                    'icon' => '🌾',
+                ];
+            }
+            // Kiểm máng
+            if ($cl['trough_pending'] > 0) {
+                $items[] = [
+                    'done' => false,
+                    'label' => $cl['trough_pending'] . ' bữa chưa kiểm máng',
+                    'icon' => '🪣',
+                ];
+            }
+
+            $done_count = count(array_filter($items, fn($i) => $i['done']));
+            $total_count = count($items);
+            $all_done = $total_count > 0 && $done_count === $total_count;
+        ?>
+        <a href="/events/create?cycle_id=<?= $cid ?>"
+           class="block bg-white dark:bg-gray-800 rounded-2xl border <?= $all_done ? 'border-green-200 dark:border-green-800' : 'border-orange-200 dark:border-orange-800' ?> p-3 active:scale-[0.98] transition-transform">
+            <div class="flex items-center justify-between mb-2">
+                <div class="text-xs font-semibold"><?= e($c['barn_name']) ?> · <?= e($c['code']) ?></div>
+                <?php if ($all_done): ?>
+                <span class="text-xs text-green-600 font-semibold">Xong</span>
+                <?php else: ?>
+                <span class="text-xs text-orange-500 font-semibold"><?= $done_count ?>/<?= $total_count ?></span>
+                <?php endif; ?>
+            </div>
+            <div class="flex flex-wrap gap-x-4 gap-y-1">
+                <?php foreach ($items as $item): ?>
+                <div class="flex items-center gap-1 text-xs <?= $item['done'] ? 'text-green-600' : 'text-gray-400' ?>">
+                    <span><?= $item['done'] ? '✅' : '⬜' ?></span>
+                    <span><?= e($item['label']) ?></span>
+                </div>
+                <?php endforeach; ?>
+                <?php if ($cl['death_count'] > 0): ?>
+                <div class="flex items-center gap-1 text-xs text-red-500">
+                    <span>💀</span><span><?= $cl['death_count'] ?> con chết</span>
+                </div>
+                <?php endif; ?>
+                <?php if ($cl['med_count'] > 0): ?>
+                <div class="flex items-center gap-1 text-xs text-blue-500">
+                    <span>💊</span><span><?= $cl['med_count'] ?> lần thuốc</span>
+                </div>
+                <?php endif; ?>
+            </div>
+        </a>
+        <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- Thông báo thiết bị IoT -->
     <?php if (!empty($device_notifications)): ?>

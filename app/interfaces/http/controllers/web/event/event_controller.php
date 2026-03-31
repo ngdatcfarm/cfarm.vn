@@ -14,17 +14,17 @@ use PDO;
 
 class EventController
 {
-    private CycleRepository $cycle_repository;
-    private BarnRepository  $barn_repository;
-    private CareRepository  $care_repository;
+    private CycleRepository  $cycle_repository;
+    private BarnRepository   $barn_repository;
+    private CareRepository   $care_repository;
+    private WeightRepository $weight_repository;
 
     public function __construct(private PDO $pdo)
     {
-        $this->cycle_repository = new CycleRepository($pdo);
-        $this->barn_repository  = new BarnRepository($pdo);
-        $this->care_repository  = new CareRepository($pdo);
+        $this->cycle_repository  = new CycleRepository($pdo);
+        $this->barn_repository   = new BarnRepository($pdo);
+        $this->care_repository   = new CareRepository($pdo);
         $this->weight_repository = new WeightRepository($pdo);
-        $this->snapshot_service  = new SnapshotService($pdo);
     }
 
     public function create(array $vars): void

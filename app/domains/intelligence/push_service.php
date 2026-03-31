@@ -40,6 +40,7 @@ class PushService
             'title' => $title,
             'body'  => $body,
             'url'   => $url,
+            'type'  => $type,
             'icon'  => '/icons/icon-192.png',
             'badge' => '/icons/icon-192.png',
         ]);

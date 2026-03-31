@@ -17,7 +17,8 @@ function render_session_cards(
     array  $medications_list,
     string $date_value,
     array  $weight_sessions = [],
-    array  $vaccine_program_items = []
+    array  $vaccine_program_items = [],
+    array  $feed_inventory_items = []
 ): void {
     $default_time = $session === 'morning' ? '08:00' : '14:00';
     $s = $session;
@@ -783,7 +784,8 @@ ob_start();
         $morning_medications, $morning_sales,
         $cycle, $feed_types, $medications_list, $date_value,
         $today_weight_sessions ?? [],
-        $vaccine_program_items ?? []
+        $vaccine_program_items ?? [],
+        $feed_inventory_items ?? []
     ); ?>
 </div>
 
@@ -795,7 +797,8 @@ ob_start();
         $evening_medications, $evening_sales,
         $cycle, $feed_types, $medications_list, $date_value,
         $today_weight_sessions ?? [],
-        $vaccine_program_items ?? []
+        $vaccine_program_items ?? [],
+        $feed_inventory_items ?? []
     ); ?>
 </div>
 
@@ -1251,6 +1254,15 @@ async function postCareInline(url, data, error_el_id) {
         });
         const json = await res.json();
         if (!json.ok) {
+            // Anomaly warning: cho user confirm để gửi lại
+            if (json.need_confirm) {
+                const msg = (json.warnings || [json.message]).join('\n') + '\n\nBạn có muốn tiếp tục lưu?';
+                if (confirm(msg)) {
+                    data.confirmed = '1';
+                    return postCareInline(url, data, error_el_id);
+                }
+                return false;
+            }
             if (el) { el.textContent = json.message; el.classList.remove('hidden'); }
             return false;
         }

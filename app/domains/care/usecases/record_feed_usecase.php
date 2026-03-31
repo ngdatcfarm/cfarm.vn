@@ -11,6 +11,7 @@ use App\Domains\Care\Contracts\CareRepositoryInterface;
 use App\Domains\Care\Entities\CareFeed;
 use App\Domains\FeedBrand\Contracts\FeedTypeRepositoryInterface;
 use App\Domains\Cycle\Contracts\CycleRepositoryInterface;
+use App\Domains\Care\Services\RecordedAtValidator;
 use InvalidArgumentException;
 
 class RecordFeedUsecase
@@ -35,6 +36,8 @@ class RecordFeedUsecase
         if (empty($input['bags']) || (float)$input['bags'] <= 0) {
             throw new InvalidArgumentException('Số bao phải lớn hơn 0');
         }
+
+        RecordedAtValidator::validate($input['recorded_at'] ?? null, $cycle);
 
         $feed_type = $this->feed_type_repository->find_by_id((int)$input['feed_type_id']);
         if (!$feed_type) {

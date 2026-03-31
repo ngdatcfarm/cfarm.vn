@@ -8,6 +8,7 @@ use App\Domains\Care\Usecases\RecordMedicationUsecase;
 use App\Domains\Care\Usecases\RecordSaleUsecase;
 use App\Domains\Care\Usecases\RecordTroughCheckUsecase;
 use App\Domains\Care\Services\CareEditPermission;
+use App\Domains\Care\Services\CareAnomalyDetector;
 use App\Infrastructure\Persistence\Mysql\Repositories\CareRepository;
 use App\Infrastructure\Persistence\Mysql\Repositories\CycleRepository;
 use App\Infrastructure\Persistence\Mysql\Repositories\FeedTypeRepository;
@@ -59,8 +60,25 @@ class CareController
     public function store_feed(array $vars): void
     {
         try {
-            // KIỂM TRA: Cycle phải có feed_program đang active
             $cycle_id = (int)$_POST['cycle_id'];
+
+            // Anomaly detection (skip nếu user đã confirm)
+            if (empty($_POST['confirmed'])) {
+                $detector = new CareAnomalyDetector($this->pdo);
+                $warnings = $detector->check_feed(
+                    $cycle_id,
+                    (int)$_POST['feed_type_id'],
+                    (float)$_POST['bags'],
+                    $_POST['session'] ?? 'morning',
+                    $_POST['recorded_at'] ?? date('Y-m-d H:i:s')
+                );
+                if (!empty($warnings)) {
+                    $this->json(false, implode("\n", $warnings), ['need_confirm' => true, 'warnings' => $warnings]);
+                    return;
+                }
+            }
+
+            // KIỂM TRA: Cycle phải có feed_program đang active
             $stmt = $this->pdo->prepare("
                 SELECT COUNT(*) FROM cycle_feed_programs
                 WHERE cycle_id = :cycle_id AND end_date IS NULL
@@ -70,21 +88,21 @@ class CareController
                 throw new \InvalidArgumentException('Cycle chưa cài đặt hãng cám. Vui lòng cài đặt trước khi ghi cho ăn.');
             }
 
-            // KIỂM TRA TỒN KHO TRƯỚC KHI LƯU (quan trọng!)
+            // KIỂM TRA TỒN KHO TRƯỚC KHI LƯU
             $stock_svc = new \App\Domains\Inventory\Services\InventoryStockService($this->pdo);
-            $stock_svc->check_feed_stock((int)$_POST['cycle_id'], (int)$_POST['feed_type_id'], (float)$_POST['bags']);
+            $stock_svc->check_feed_stock($cycle_id, (int)$_POST['feed_type_id'], (float)$_POST['bags']);
 
-            // CHỈ LƯU SAU KHI KIỂM TRA TỒN KHO THÀNH CÔNG
+            // LƯU
             $usecase = new RecordFeedUsecase(
                 $this->care_repository,
                 new FeedTypeRepository($this->pdo),
                 $this->cycle_repository
             );
             $id = $usecase->execute($cycle_id, $_POST);
-            $this->trigger_snapshot((int)$_POST['cycle_id'], $_POST['recorded_at'] ?? null);
+            $this->trigger_snapshot($cycle_id, $_POST['recorded_at'] ?? null);
 
-            // AUTO DEDUCT INVENTORY (sau khi đã lưu thành công)
-            $stock_svc->deduct_feed($id, (int)$_POST['cycle_id'], (int)$_POST['feed_type_id'], (float)$_POST['bags']);
+            // AUTO DEDUCT INVENTORY
+            $stock_svc->deduct_feed($id, $cycle_id, (int)$_POST['feed_type_id'], (float)$_POST['bags']);
 
             $this->json(true, 'Đã ghi chép cho ăn', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {
@@ -98,9 +116,25 @@ class CareController
     public function store_death(array $vars): void
     {
         try {
+            $cycle_id = (int)$_POST['cycle_id'];
+
+            // Anomaly detection
+            if (empty($_POST['confirmed'])) {
+                $detector = new CareAnomalyDetector($this->pdo);
+                $warnings = $detector->check_death(
+                    $cycle_id,
+                    (int)($_POST['quantity'] ?? 0),
+                    $_POST['recorded_at'] ?? date('Y-m-d H:i:s')
+                );
+                if (!empty($warnings)) {
+                    $this->json(false, implode("\n", $warnings), ['need_confirm' => true, 'warnings' => $warnings]);
+                    return;
+                }
+            }
+
             $usecase = new RecordDeathUsecase($this->care_repository, $this->cycle_repository);
-            $id = $usecase->execute((int)$_POST['cycle_id'], $_POST);
-            $this->trigger_snapshot((int)$_POST['cycle_id'], $_POST['recorded_at'] ?? null);
+            $id = $usecase->execute($cycle_id, $_POST);
+            $this->trigger_snapshot($cycle_id, $_POST['recorded_at'] ?? null);
             $this->json(true, 'Đã ghi chép hao hụt', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {
             $this->json(false, $e->getMessage());
@@ -116,9 +150,6 @@ class CareController
             try {
                 $stock_svc = new \App\Domains\Inventory\Services\InventoryStockService($this->pdo);
                 $stock_svc->deduct_medication($id, (int)$_POST['cycle_id'], !empty($_POST['medication_id']) ? (int)$_POST['medication_id'] : null, (float)$_POST['dosage'], $_POST['unit'] ?? '');
-            } catch (\InvalidArgumentException $e) {
-                $this->json(false, $e->getMessage());
-                return;
             } catch (\Throwable $e) { error_log("Inventory deduct_med: ".$e->getMessage()); }
             $this->json(true, 'Đã ghi chép thuốc', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {
@@ -129,8 +160,20 @@ class CareController
     public function store_sale(array $vars): void
     {
         try {
+            $cycle_id = (int)$_POST['cycle_id'];
+
+            // Duplicate detection
+            if (empty($_POST['confirmed'])) {
+                $detector = new CareAnomalyDetector($this->pdo);
+                $warnings = $detector->check_sale($cycle_id, $_POST['recorded_at'] ?? date('Y-m-d H:i:s'));
+                if (!empty($warnings)) {
+                    $this->json(false, implode("\n", $warnings), ['need_confirm' => true, 'warnings' => $warnings]);
+                    return;
+                }
+            }
+
             $usecase = new RecordSaleUsecase($this->care_repository, $this->cycle_repository);
-            $id = $usecase->execute((int)$_POST['cycle_id'], $_POST);
+            $id = $usecase->execute($cycle_id, $_POST);
             $this->trigger_snapshot((int)$_POST['cycle_id'], $_POST['recorded_at'] ?? null);
             $this->json(true, 'Đã ghi chép bán gà', ['id' => $id]);
         } catch (\InvalidArgumentException $e) {
@@ -233,7 +276,34 @@ class CareController
 
     public function delete_death(array $vars): void
     {
-        $this->handle_delete('care_deaths', (int)$vars['id'], $_POST['override_pass'] ?? null);
+        $id   = (int)$vars['id'];
+        $pass = $_POST['override_pass'] ?? null;
+
+        $stmt = $this->pdo->prepare("SELECT cycle_id, quantity, recorded_at FROM care_deaths WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            $this->json(false, 'Không tìm thấy bản ghi');
+            return;
+        }
+
+        if (!CareEditPermission::can_delete($row['recorded_at'], $pass)) {
+            $deadline = CareEditPermission::delete_deadline($row['recorded_at']);
+            $this->json(false, "Quá hạn xóa ({$deadline}). Nhập mật khẩu để tiếp tục.", [
+                'need_pass' => true
+            ]);
+            return;
+        }
+
+        // Hoàn lại current_quantity
+        $this->pdo->prepare("
+            UPDATE cycles SET current_quantity = current_quantity + :qty WHERE id = :cid
+        ")->execute([':qty' => (int)$row['quantity'], ':cid' => (int)$row['cycle_id']]);
+
+        $this->pdo->prepare("DELETE FROM care_deaths WHERE id = :id")->execute([':id' => $id]);
+        $this->trigger_snapshot((int)$row['cycle_id'], $row['recorded_at']);
+        $this->json(true, 'Đã xóa và hoàn lại số lượng');
     }
 
     public function delete_medication(array $vars): void
@@ -280,7 +350,36 @@ class CareController
 
     public function delete_sale(array $vars): void
     {
-        $this->handle_delete('care_sales', (int)$vars['id'], $_POST['override_pass'] ?? null);
+        $id   = (int)$vars['id'];
+        $pass = $_POST['override_pass'] ?? null;
+
+        $stmt = $this->pdo->prepare("SELECT cycle_id, quantity, recorded_at FROM care_sales WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            $this->json(false, 'Không tìm thấy bản ghi');
+            return;
+        }
+
+        if (!CareEditPermission::can_delete($row['recorded_at'], $pass)) {
+            $deadline = CareEditPermission::delete_deadline($row['recorded_at']);
+            $this->json(false, "Quá hạn xóa ({$deadline}). Nhập mật khẩu để tiếp tục.", [
+                'need_pass' => true
+            ]);
+            return;
+        }
+
+        // Hoàn lại current_quantity nếu có số con
+        if (!empty($row['quantity']) && (int)$row['quantity'] > 0) {
+            $this->pdo->prepare("
+                UPDATE cycles SET current_quantity = current_quantity + :qty WHERE id = :cid
+            ")->execute([':qty' => (int)$row['quantity'], ':cid' => (int)$row['cycle_id']]);
+        }
+
+        $this->pdo->prepare("DELETE FROM care_sales WHERE id = :id")->execute([':id' => $id]);
+        $this->trigger_snapshot((int)$row['cycle_id'], $row['recorded_at']);
+        $this->json(true, 'Đã xóa và hoàn lại số lượng');
     }
 
     public function delete_trough_check(array $vars): void
@@ -384,6 +483,7 @@ class CareController
             ':rat'  => $_POST['recorded_at'] ?? $row['recorded_at'],
             ':id'   => $id,
         ]);
+        $this->trigger_snapshot((int)$row['cycle_id'], $_POST['recorded_at'] ?? $row['recorded_at']);
         $this->json(true, 'Đã cập nhật');
     }
 
@@ -398,16 +498,55 @@ class CareController
         if (!CareEditPermission::can_edit($row['recorded_at'], $pass)) {
             $this->json(false, 'Quá hạn sửa.', ['need_pass' => true]); return;
         }
+        $old_qty = (int)$row['quantity'];
+        $new_qty = (int)($_POST['quantity'] ?? $row['quantity']);
+
+        // Validation: quantity > 0
+        if ($new_qty <= 0) {
+            $this->json(false, 'Số con chết phải lớn hơn 0');
+            return;
+        }
+
+        // Validation: không được >= current_quantity (tính lại sau khi hoàn old)
+        $cycle = $this->cycle_repository->find_by_id((int)$row['cycle_id']);
+        $available = $cycle->current_quantity + $old_qty; // hoàn lại cũ
+        if ($new_qty >= $available) {
+            $this->json(false, "Số con chết ({$new_qty}) không thể >= số con hiện tại ({$available})");
+            return;
+        }
+
+        // Validation: recorded_at hợp lệ
+        $recorded_at = $_POST['recorded_at'] ?? $row['recorded_at'];
+        if ($recorded_at && $cycle) {
+            $rec_date = substr($recorded_at, 0, 10);
+            if ($rec_date < $cycle->start_date) {
+                $this->json(false, 'Ngày ghi không thể trước ngày bắt đầu chu kỳ');
+                return;
+            }
+            if ($rec_date > date('Y-m-d')) {
+                $this->json(false, 'Ngày ghi không thể ở tương lai');
+                return;
+            }
+        }
+
         $this->pdo->prepare("
             UPDATE care_deaths SET quantity=:q, reason=:r, symptoms=:s, note=:n, recorded_at=:rat WHERE id=:id
         ")->execute([
-            ':q'   => (int)($_POST['quantity'] ?? $row['quantity']),
+            ':q'   => $new_qty,
             ':r'   => $_POST['reason']   ?? $row['reason'],
             ':s'   => $_POST['symptoms'] ?? $row['symptoms'],
             ':n'   => $_POST['note']     ?? $row['note'],
-            ':rat' => $_POST['recorded_at'] ?? $row['recorded_at'],
+            ':rat' => $recorded_at,
             ':id'  => $id,
         ]);
+        // Điều chỉnh current_quantity: cũ trừ 10, mới trừ 3 → cộng lại 7
+        $diff = $old_qty - $new_qty;
+        if ($diff !== 0) {
+            $this->pdo->prepare("
+                UPDATE cycles SET current_quantity = current_quantity + :diff WHERE id = :cid
+            ")->execute([':diff' => $diff, ':cid' => (int)$row['cycle_id']]);
+        }
+        $this->trigger_snapshot((int)$row['cycle_id'], $recorded_at);
         $this->json(true, 'Đã cập nhật');
     }
 
@@ -433,6 +572,7 @@ class CareController
             ':rat' => $_POST['recorded_at']     ?? $row['recorded_at'],
             ':id'  => $id,
         ]);
+        $this->trigger_snapshot((int)$row['cycle_id'], $_POST['recorded_at'] ?? $row['recorded_at']);
         $this->json(true, 'Đã cập nhật');
     }
 
@@ -447,8 +587,36 @@ class CareController
         if (!CareEditPermission::can_edit($row['recorded_at'], $pass)) {
             $this->json(false, 'Quá hạn sửa.', ['need_pass' => true]); return;
         }
-        $weight = (float)($_POST['weight_kg']    ?? $row['weight_kg']);
-        $price  = (float)($_POST['price_per_kg'] ?? $row['price_per_kg']);
+        $weight  = (float)($_POST['weight_kg']    ?? $row['weight_kg']);
+        $price   = (float)($_POST['price_per_kg'] ?? $row['price_per_kg']);
+        $old_qty = (int)($row['quantity'] ?? 0);
+        $new_qty = (int)($_POST['quantity'] ?? $row['quantity'] ?? 0);
+
+        // Validation
+        if ($weight <= 0) { $this->json(false, 'Tổng cân nặng phải lớn hơn 0'); return; }
+        if ($price <= 0)  { $this->json(false, 'Giá/kg phải lớn hơn 0'); return; }
+
+        if ($new_qty > 0) {
+            $cycle = $this->cycle_repository->find_by_id((int)$row['cycle_id']);
+            $available = $cycle->current_quantity + $old_qty;
+            if ($new_qty > $available) {
+                $this->json(false, "Số con bán ({$new_qty}) lớn hơn số con hiện tại ({$available})");
+                return;
+            }
+        }
+
+        $recorded_at = $_POST['recorded_at'] ?? $row['recorded_at'];
+        if ($recorded_at) {
+            $rec_date = substr($recorded_at, 0, 10);
+            $cycle ??= $this->cycle_repository->find_by_id((int)$row['cycle_id']);
+            if ($cycle && $rec_date < $cycle->start_date) {
+                $this->json(false, 'Ngày ghi không thể trước ngày bắt đầu chu kỳ'); return;
+            }
+            if ($rec_date > date('Y-m-d')) {
+                $this->json(false, 'Ngày ghi không thể ở tương lai'); return;
+            }
+        }
+
         $this->pdo->prepare("
             UPDATE care_sales SET weight_kg=:w, price_per_kg=:p, total_amount=:t,
             quantity=:q, gender=:g, note=:n, recorded_at=:rat WHERE id=:id
@@ -456,12 +624,20 @@ class CareController
             ':w'   => $weight,
             ':p'   => $price,
             ':t'   => $weight * $price,
-            ':q'   => $_POST['quantity'] ?? $row['quantity'],
+            ':q'   => $new_qty ?: null,
             ':g'   => $_POST['gender']   ?? $row['gender'],
             ':n'   => $_POST['note']     ?? $row['note'],
-            ':rat' => $_POST['recorded_at'] ?? $row['recorded_at'],
+            ':rat' => $recorded_at,
             ':id'  => $id,
         ]);
+        // Điều chỉnh current_quantity nếu số con thay đổi
+        $diff = $old_qty - $new_qty;
+        if ($diff !== 0) {
+            $this->pdo->prepare("
+                UPDATE cycles SET current_quantity = current_quantity + :diff WHERE id = :cid
+            ")->execute([':diff' => $diff, ':cid' => (int)$row['cycle_id']]);
+        }
+        $this->trigger_snapshot((int)$row['cycle_id'], $_POST['recorded_at'] ?? $row['recorded_at']);
         $this->json(true, 'Đã cập nhật');
     }
 }

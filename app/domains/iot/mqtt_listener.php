@@ -55,9 +55,17 @@ function processMessage(PDO $pdo, string $topic, string $message): void
 {
     $parts = explode('/', $topic);
     // Expect: cfarm/{device_code}/{msg_type}
-    if (count($parts) < 3) return;
+    if (count($parts) < 3) {
+        logMsg("SKIP topic < 3 parts: {$topic}");
+        return;
+    }
 
     $msgType = end($parts);
+
+    // Log TẤT CẢ message nhận được (trừ heartbeat quá nhiều)
+    if ($msgType !== 'heartbeat') {
+        logMsg("<<< [{$topic}] type={$msgType} len=" . strlen($message));
+    }
 
     // Xây dựng mqtt_topic = tất cả phần trước msg_type
     $baseParts = array_slice($parts, 0, count($parts) - 1);
@@ -65,18 +73,31 @@ function processMessage(PDO $pdo, string $topic, string $message): void
 
     // Parse payload để lấy device_code - BẮT BUỘC phải có
     $data = json_decode($message, true);
+    if ($data === null) {
+        logMsg("JSON PARSE FAILED topic={$topic} raw=" . substr($message, 0, 200));
+        return;
+    }
     $payloadDeviceCode = $data['device'] ?? null;
 
     // Bỏ qua message không có device_code (retained rỗng, message lỗi, v.v.)
-    if (!$payloadDeviceCode) return;
+    if (!$payloadDeviceCode) {
+        if ($msgType === 'env') {
+            logMsg("ENV missing 'device' field! payload=" . substr($message, 0, 200));
+        }
+        return;
+    }
 
     // Tìm device CHỈ theo device_code (chính xác 1:1, không dùng mqtt_topic)
-    // Tránh device cũ cùng mqtt_topic ảnh hưởng device mới
-    $stmt = $pdo->prepare("SELECT id, device_code, name FROM devices WHERE device_code = ?");
+    $stmt = $pdo->prepare("SELECT id, device_code, name, barn_id FROM devices WHERE device_code = ?");
     $stmt->execute([$payloadDeviceCode]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$device) return;
+    if (!$device) {
+        if ($msgType === 'env') {
+            logMsg("ENV device NOT FOUND in DB: device_code={$payloadDeviceCode}");
+        }
+        return;
+    }
 
     $deviceId = (int)$device['id'];
 
@@ -94,8 +115,12 @@ function processMessage(PDO $pdo, string $topic, string $message): void
             handlePong($pdo, $deviceId);
             break;
 
+        case 'env':
+            handleEnvData($pdo, $deviceId, $device, $message);
+            break;
+
         default:
-            // Log unknown message types for debugging
+            logMsg("UNKNOWN msg_type={$msgType} topic={$topic}");
             break;
     }
 }
@@ -124,7 +149,8 @@ function handleHeartbeat(PDO $pdo, int $deviceId, string $message): void
             ip_address          = :ip,
             uptime_seconds      = :uptime,
             free_heap_bytes     = :heap,
-            ping_fail_count     = 0
+            ping_fail_count     = 0,
+            last_offline_alert_at = NULL
         WHERE id = :id
     ")->execute([
         ':rssi'   => $data['wifi_rssi'] ?? $data['rssi'] ?? null,
@@ -153,9 +179,126 @@ function handlePong(PDO $pdo, int $deviceId): void
         UPDATE devices SET
             is_online = 1,
             last_heartbeat_at = NOW(),
-            ping_fail_count = 0
+            ping_fail_count = 0,
+            last_offline_alert_at = NULL
         WHERE id = ?
     ")->execute([$deviceId]);
+}
+
+/**
+ * Xử lý dữ liệu cảm biến môi trường từ ESP32 ENV Sensor
+ * Lưu vào bảng env_readings (khớp với EnvController)
+ */
+function handleEnvData(PDO $pdo, int $deviceId, array $device, string $message): void
+{
+    $data = json_decode($message, true);
+    if (!$data) {
+        logMsg("ENV [{$device['device_code']}] JSON parse failed: " . substr($message, 0, 200));
+        return;
+    }
+
+    // Bỏ qua message status (ví dụ OTA updating)
+    if (isset($data['status'])) {
+        logMsg("ENV [{$device['device_code']}] skip status msg: {$data['status']}");
+        return;
+    }
+
+    // Lấy barn_id từ device
+    $barnId = $device['barn_id'] ?? null;
+
+    // Lấy cycle_id active + tính day_age
+    $cycleId = null;
+    $dayAge = null;
+    if ($barnId) {
+        $stmt = $pdo->prepare("SELECT id, start_date FROM cycles WHERE barn_id = ? AND status = 'active' LIMIT 1");
+        $stmt->execute([$barnId]);
+        $row = $stmt->fetch();
+        if ($row) {
+            $cycleId = (int)$row['id'];
+            $dayAge = (int)((time() - strtotime($row['start_date'])) / 86400) + 1;
+        }
+    }
+
+    // Tính heat index (chỉ số nhiệt cảm nhận)
+    $temp = $data['temp'] ?? null;
+    $hum = $data['humidity'] ?? null;
+    $heatIndex = null;
+    if ($temp !== null && $hum !== null) {
+        $heatIndex = calcHeatIndex((float)$temp, (float)$hum);
+    }
+
+    try {
+        $pdo->prepare("
+            INSERT INTO env_readings
+                (device_id, barn_id, cycle_id, day_age,
+                 temperature, humidity, heat_index, light_lux,
+                 nh3_ppm, co2_ppm, recorded_at)
+            VALUES
+                (:device_id, :barn_id, :cycle_id, :day_age,
+                 :temp, :humidity, :heat_index, :lux,
+                 :nh3, :co2, NOW())
+        ")->execute([
+            ':device_id'   => $deviceId,
+            ':barn_id'     => $barnId,
+            ':cycle_id'    => $cycleId,
+            ':day_age'     => $dayAge,
+            ':temp'        => $temp,
+            ':humidity'    => $hum,
+            ':heat_index'  => $heatIndex,
+            ':lux'         => $data['lux'] ?? null,
+            ':nh3'         => $data['nh3_ppm'] ?? null,
+            ':co2'         => $data['co2_ppm'] ?? null,
+        ]);
+    } catch (PDOException $e) {
+        logMsg("ENV [{$device['device_code']}] INSERT FAILED: " . $e->getMessage());
+        logMsg("ENV [{$device['device_code']}] payload: " . substr($message, 0, 300));
+        return;
+    }
+
+    // Cập nhật device online status
+    $pdo->prepare("
+        UPDATE devices SET is_online = 1, last_heartbeat_at = NOW(), ping_fail_count = 0, last_offline_alert_at = NULL
+        WHERE id = ?
+    ")->execute([$deviceId]);
+
+    $nullCount = ($temp === null ? 1 : 0) + ($hum === null ? 1 : 0) + (($data['lux'] ?? null) === null ? 1 : 0)
+        + (($data['nh3_ppm'] ?? null) === null ? 1 : 0) + (($data['co2_ppm'] ?? null) === null ? 1 : 0);
+    $nullInfo = $nullCount > 0 ? " ({$nullCount} null sensors)" : "";
+    logMsg("ENV [{$device['device_code']}] OK{$nullInfo} T={$temp} H={$hum} HI={$heatIndex} L=" . ($data['lux'] ?? 'null') . " NH3=" . ($data['nh3_ppm'] ?? 'null') . " CO2=" . ($data['co2_ppm'] ?? 'null') . " day={$dayAge}");
+}
+
+/**
+ * Tính Heat Index (chỉ số nhiệt cảm nhận) theo công thức Rothfusz
+ * Dùng cho cảnh báo stress nhiệt gia cầm
+ */
+function calcHeatIndex(float $tempC, float $humidity): float
+{
+    // Chuyển sang Fahrenheit để tính
+    $T = $tempC * 9.0 / 5.0 + 32.0;
+    $R = $humidity;
+
+    // Công thức đơn giản cho T < 80°F
+    $hi = 0.5 * ($T + 61.0 + (($T - 68.0) * 1.2) + ($R * 0.094));
+
+    if ($hi >= 80) {
+        // Công thức Rothfusz đầy đủ
+        $hi = -42.379 + 2.04901523*$T + 10.14333127*$R
+            - 0.22475541*$T*$R - 0.00683783*$T*$T
+            - 0.05481717*$R*$R + 0.00122874*$T*$T*$R
+            + 0.00085282*$T*$R*$R - 0.00000199*$T*$T*$R*$R;
+
+        // Điều chỉnh cho độ ẩm thấp
+        if ($R < 13 && $T >= 80 && $T <= 112) {
+            $hi -= ((13 - $R) / 4) * sqrt((17 - abs($T - 95)) / 17);
+        }
+        // Điều chỉnh cho độ ẩm cao
+        if ($R > 85 && $T >= 80 && $T <= 87) {
+            $hi += (($R - 85) / 10) * ((87 - $T) / 5);
+        }
+    }
+
+    // Chuyển về Celsius
+    return round(($hi - 32.0) * 5.0 / 9.0, 2);
 }
 
 /**
