@@ -106,6 +106,9 @@ class SyncController
 
         // Các bảng config mà cloud là master
         $config_tables = [
+            'barns'                => 'updated_at',
+            'cycles'               => 'updated_at',
+            'cycle_splits'         => 'created_at',
             'feed_brands'          => 'updated_at',
             'feed_types'           => 'updated_at',
             'medications'          => 'updated_at',
@@ -353,9 +356,9 @@ class SyncController
 
         // Whitelist các bảng được phép sync
         $allowed_tables = [
-            'barns', 'cycles',
-            'feed_records', 'death_records', 'medication_records',
-            'weight_sessions', 'weight_details', 'sale_records',
+            'barns', 'cycles', 'cycle_splits',
+            'care_feeds', 'care_deaths', 'care_medications',
+            'weight_sessions', 'weight_details', 'care_sales',
             'health_notes', 'vaccine_schedules',
             'devices', 'alerts',
             'feed_brands', 'feed_types', 'medications', 'suppliers',
