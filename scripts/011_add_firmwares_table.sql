@@ -20,14 +20,26 @@ CREATE TABLE IF NOT EXISTS firmwares (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Add firmware_id column to devices if not exists
--- This links devices to their assigned firmware
-ALTER TABLE devices ADD COLUMN IF NOT EXISTS firmware_id INT AFTER firmware_version;
+-- MySQL workaround: use procedure to check column existence
+DROP PROCEDURE IF EXISTS add_column_if_not_exists$$
+CREATE PROCEDURE add_column_if_not_exists()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+        AND table_name = 'devices'
+        AND column_name = 'firmware_id'
+    ) THEN
+        ALTER TABLE devices ADD COLUMN firmware_id INT AFTER firmware_version;
+    END IF;
+END$$
+CALL add_column_if_not_exists()$$
+DROP PROCEDURE IF EXISTS add_column_if_not_exists$$
 
 -- Add index for faster firmware lookups
-CREATE INDEX IF NOT EXISTS idx_devices_firmware ON devices (firmware_id);
+CREATE INDEX idx_devices_firmware ON devices (firmware_id);
 
 -- Sync existing devices that have firmware_version but no firmware_id
--- Try to match by device_type_id to device_types.code = device_type_code
 UPDATE devices d
 JOIN device_types dt ON dt.id = d.device_type_id
 JOIN (
@@ -35,5 +47,3 @@ JOIN (
 ) f ON f.device_type_code = dt.code
 SET d.firmware_id = f.fw_id
 WHERE d.firmware_id IS NULL AND d.firmware_version IS NOT NULL;
-
-DO $$ BEGIN SELECT '=== 011: firmwares table added to cloud ===' as result; END $$;
