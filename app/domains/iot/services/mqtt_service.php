@@ -9,6 +9,10 @@ use Exception;
 /**
  * MQTT Service - Gửi/nhận lệnh ESP32 qua MQTT broker
  * Sử dụng php-mqtt/client thay vì mosquitto CLI
+ *
+ * Hỗ trợ dual-subscribe cho ESP32 firmware mới:
+ * - Local prefix: cfarm/{code}/cmd (cho local server)
+ * - Cloud prefix: cfarm.vn/{code}/cmd (cho cloud server - dual subscribe ESP32)
  */
 class MqttService
 {
@@ -18,6 +22,9 @@ class MqttService
     private string $pass = 'Abc@@123';
 
     private ?MqttClient $client = null;
+
+    // Prefix cho cloud MQTT (dual-subscribe ESP32)
+    const CLOUD_PREFIX = 'cfarm.vn';
 
     /**
      * Kết nối đến MQTT broker (lazy connect)
@@ -132,6 +139,91 @@ class MqttService
             'ts'     => time(),
         ]);
     }
+
+    // =========================================================================
+    // DUAL-SUBSCRIBE METHODS (for ESP32 firmware with cloud MQTT support)
+    // These publish to cfarm.vn/{code}/cmd instead of cfarm/{code}/cmd
+    // =========================================================================
+
+    /**
+     * Chuyển đổi mqtt_topic sang cloud prefix
+     * cfarm/barn1 -> cfarm.vn/barn1
+     * cfarm.vn/barn1 -> cfarm.vn/barn1 (no change)
+     */
+    public function toCloudTopic(string $mqttTopic): string
+    {
+        // Remove any existing prefix
+        $topic = preg_replace('#^cfarm\.vn/#', '', $mqttTopic);
+        $topic = preg_replace('#^cfarm/#', '', $topic);
+
+        return self::CLOUD_PREFIX . '/' . $topic;
+    }
+
+    /**
+     * Gửi lệnh relay qua cloud MQTT (dual-subscribe ESP32)
+     * Publishes to cfarm.vn/{code}/cmd
+     */
+    public function sendRelayCommandCloud(string $deviceCode, int $channel, string $state): bool
+    {
+        $topic = $this->toCloudTopic($deviceCode) . '/cmd';
+        return $this->publish($topic, [
+            'action'  => 'relay',
+            'channel' => $channel,
+            'state'   => $state,
+        ]);
+    }
+
+    /**
+     * Gửi lệnh relay với duration qua cloud MQTT (dual-subscribe ESP32)
+     * Publishes to cfarm.vn/{code}/cmd
+     */
+    public function sendRelayOnWithDurationCloud(string $deviceCode, int $channel, int $durationSeconds): bool
+    {
+        $topic = $this->toCloudTopic($deviceCode) . '/cmd';
+        return $this->publish($topic, [
+            'action'   => 'relay',
+            'channel'  => $channel,
+            'state'    => 'on',
+            'duration' => $durationSeconds,
+        ]);
+    }
+
+    /**
+     * Gửi lệnh tắt relay qua cloud MQTT (dual-subscribe ESP32)
+     * Publishes to cfarm.vn/{code}/cmd
+     */
+    public function sendRelayOffCloud(string $deviceCode, int $channel): bool
+    {
+        return $this->sendRelayCommandCloud($deviceCode, $channel, 'off');
+    }
+
+    /**
+     * Gửi lệnh ping qua cloud MQTT (dual-subscribe ESP32)
+     * Publishes to cfarm.vn/{code}/cmd
+     */
+    public function sendPingCloud(string $deviceCode): bool
+    {
+        $topic = $this->toCloudTopic($deviceCode) . '/cmd';
+        return $this->publish($topic, [
+            'action' => 'ping',
+            'ts'     => time(),
+        ]);
+    }
+
+    /**
+     * Gửi curtain position qua cloud MQTT (dual-subscribe ESP32)
+     * Publishes to cfarm.vn/{code}/cmd với action set_position
+     */
+    public function sendCurtainPositionCloud(string $deviceCode, int $positionPct): bool
+    {
+        $topic = $this->toCloudTopic($deviceCode) . '/cmd';
+        return $this->publish($topic, [
+            'action' => 'set_position',
+            'to'     => $positionPct,
+        ]);
+    }
+
+    // =========================================================================
 
     /**
      * Đóng kết nối
