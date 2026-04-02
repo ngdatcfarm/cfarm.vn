@@ -116,6 +116,7 @@ class SyncController
             'vaccine_programs'     => 'updated_at',
             'vaccine_program_items'=> 'updated_at',
             'notification_rules'   => 'updated_at',
+            'firmwares'            => 'created_at',
         ];
 
         $items = [];
@@ -216,7 +217,7 @@ class SyncController
     }
 
     // ── 4. POST /api/sync/device-states ─────────────
-    // Nhận trạng thái online/offline thiết bị
+    // Nhận trạng thái thiết bị từ local - TỰ TẠO device nếu chưa có (cloud theo local)
 
     public function device_states(array $vars): void
     {
@@ -228,31 +229,115 @@ class SyncController
         $body = $this->get_json_body();
         $items = $body['items'] ?? [];
         $received = 0;
+        $created = 0;
 
         foreach ($items as $item) {
             try {
-                $stmt = $this->pdo->prepare("
-                    UPDATE devices SET
-                        is_online = :is_online,
-                        last_seen = :last_seen,
-                        ip_address = :ip_address,
-                        firmware_version = :firmware_version
-                    WHERE device_code = :device_code
-                ");
-                $stmt->execute([
-                    ':device_code'      => $item['device_code'],
-                    ':is_online'        => $item['is_online'] ? 1 : 0,
-                    ':last_seen'        => $item['last_seen'] ? date('Y-m-d H:i:s', strtotime($item['last_seen'])) : null,
-                    ':ip_address'       => $item['ip_address'] ?? null,
-                    ':firmware_version' => $item['firmware_version'] ?? null,
-                ]);
-                if ($stmt->rowCount() > 0) $received++;
+                $device_code = $item['device_code'] ?? null;
+                if (!$device_code) continue;
+
+                // Check if device exists
+                $check = $this->pdo->prepare("SELECT id FROM devices WHERE device_code = ?");
+                $check->execute([$device_code]);
+                $exists = $check->fetch() !== false;
+
+                if (!$exists) {
+                    // Auto-create device from local data
+                    // Use device_code as default name, default to relay type (id=1)
+                    $mqtt_topic = 'cfarm/' . $device_code;
+                    $stmt = $this->pdo->prepare("
+                        INSERT INTO devices (device_code, name, device_type_id, mqtt_topic, is_online, last_seen, ip_address, firmware_version, created_at, updated_at)
+                        VALUES (:device_code, :name, :type_id, :mqtt_topic, :is_online, :last_seen, :ip_address, :firmware_version, NOW(), NOW())
+                    ");
+                    $stmt->execute([
+                        ':device_code'      => $device_code,
+                        ':name'            => $item['name'] ?? $device_code,
+                        ':type_id'         => $item['device_type_id'] ?? 1, // default relay type
+                        ':mqtt_topic'      => $item['mqtt_topic'] ?? $mqtt_topic,
+                        ':is_online'       => $item['is_online'] ? 1 : 0,
+                        ':last_seen'       => $item['last_seen'] ? date('Y-m-d H:i:s', strtotime($item['last_seen'])) : null,
+                        ':ip_address'      => $item['ip_address'] ?? null,
+                        ':firmware_version'=> $item['firmware_version'] ?? null,
+                    ]);
+                    $created++;
+                    $received++;
+                    error_log("[Sync] Auto-created device {$device_code} on cloud");
+                } else {
+                    // Update existing device
+                    $stmt = $this->pdo->prepare("
+                        UPDATE devices SET
+                            is_online = :is_online,
+                            last_seen = :last_seen,
+                            ip_address = :ip_address,
+                            firmware_version = :firmware_version,
+                            wifi_rssi = :wifi_rssi,
+                            uptime_seconds = :uptime_seconds,
+                            updated_at = NOW()
+                        WHERE device_code = :device_code
+                    ");
+                    $stmt->execute([
+                        ':device_code'      => $device_code,
+                        ':is_online'        => $item['is_online'] ? 1 : 0,
+                        ':last_seen'        => $item['last_seen'] ? date('Y-m-d H:i:s', strtotime($item['last_seen'])) : null,
+                        ':ip_address'       => $item['ip_address'] ?? null,
+                        ':firmware_version' => $item['firmware_version'] ?? null,
+                        ':wifi_rssi'        => $item['wifi_rssi'] ?? null,
+                        ':uptime_seconds'   => $item['uptime_seconds'] ?? null,
+                    ]);
+                    if ($stmt->rowCount() > 0) $received++;
+                }
+
+                // Also sync device_channels if provided
+                if (!empty($item['channels']) && is_array($item['channels'])) {
+                    $this->sync_device_channels($device_code, $item['channels']);
+                }
             } catch (\Throwable $e) {
                 error_log("Device state error: " . $e->getMessage());
             }
         }
 
-        $this->json(true, ['received' => $received]);
+        $this->json(true, ['received' => $received, 'created' => $created]);
+    }
+
+    // Sync device channels from local to cloud
+    private function sync_device_channels(string $device_code, array $channels): void
+    {
+        try {
+            // Get device_id
+            $stmt = $this->pdo->prepare("SELECT id FROM devices WHERE device_code = ?");
+            $stmt->execute([$device_code]);
+            $row = $stmt->fetch();
+            if (!$row) return;
+            $device_id = $row['id'];
+
+            foreach ($channels as $ch) {
+                $channel_number = $ch['channel_number'] ?? null;
+                if (!$channel_number) continue;
+
+                // Upsert channel
+                $stmt = $this->pdo->prepare("
+                    INSERT INTO device_channels (device_id, channel_number, name, channel_type, gpio_pin, is_active, sort_order)
+                    VALUES (:device_id, :channel_number, :name, :channel_type, :gpio_pin, :is_active, :sort_order)
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        channel_type = VALUES(channel_type),
+                        gpio_pin = VALUES(gpio_pin),
+                        is_active = VALUES(is_active),
+                        sort_order = VALUES(sort_order)
+                ");
+                $stmt->execute([
+                    ':device_id'     => $device_id,
+                    ':channel_number'=> $channel_number,
+                    ':name'         => $ch['name'] ?? 'Kênh ' . $channel_number,
+                    ':channel_type'  => $ch['channel_type'] ?? 'other',
+                    ':gpio_pin'      => $ch['gpio_pin'] ?? null,
+                    ':is_active'    => $ch['is_active'] ?? 1,
+                    ':sort_order'    => $channel_number,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            error_log("Sync channels error: " . $e->getMessage());
+        }
     }
 
     // ── 5. POST /api/sync/command ───────────────────
@@ -360,7 +445,7 @@ class SyncController
             'care_feeds', 'care_deaths', 'care_medications',
             'weight_sessions', 'weight_details', 'care_sales',
             'health_notes', 'vaccine_schedules',
-            'devices', 'alerts',
+            'devices', 'alerts', 'firmwares',
             'feed_brands', 'feed_types', 'medications', 'suppliers',
             'vaccine_programs', 'vaccine_program_items',
             'notification_rules',
