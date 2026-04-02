@@ -247,6 +247,17 @@ $r->addRoute('GET',  '/iot/curtain/{id:\d+}/status',       [CurtainController::c
 use App\Interfaces\Http\Controllers\Web\IoT\CurtainSetupController;
 $r->addRoute('GET',  '/settings/iot/curtain/setup',        [CurtainSetupController::class, 'setup']);
 $r->addRoute('POST', '/settings/iot/curtain/store',         [CurtainSetupController::class, 'store']);
+
+// =============================================================================
+// IoT DIRECT COMMAND ROUTES - Cloud MQTT (Dual-Subscribe ESP32)
+// Publishes directly to cfarm.vn/{code}/cmd instead of cfarm/{code}/cmd
+// =============================================================================
+use App\Interfaces\Http\Controllers\Web\IoT\Commands\DirectCommandController;
+$r->addRoute('GET',  '/api/iot/direct/devices',              [DirectCommandController::class, 'devices']);
+$r->addRoute('POST', '/api/iot/direct/relay',               [DirectCommandController::class, 'relay']);
+$r->addRoute('POST', '/api/iot/direct/relay-timed',         [DirectCommandController::class, 'relayTimed']);
+$r->addRoute('POST', '/api/iot/direct/curtain',             [DirectCommandController::class, 'curtain']);
+$r->addRoute('POST', '/api/iot/direct/ping',                [DirectCommandController::class, 'ping']);
 $r->addRoute('POST', '/settings/iot/curtain/visual-save',  [CurtainSetupController::class, 'visual_save']);
 $r->addRoute('POST', '/settings/iot/curtain/{id:\d+}/delete', [CurtainSetupController::class, 'delete']);
 
@@ -268,6 +279,10 @@ $r->addRoute('POST', '/settings/iot/type/{id:\d+}/delete', [DeviceController::cl
 // Device Status API (polling from webapp)
 $r->addRoute('GET', '/api/iot/devices/status',           [DeviceController::class, 'devices_status']);
 $r->addRoute('GET', '/api/iot/device/{id:\d+}/status',   [DeviceController::class, 'device_status']);
+
+// Relay Control API (Cloud MQTT for dual-subscribe ESP32)
+$r->addRoute('POST', '/api/iot/device/{id:\d+}/relay',       [DeviceController::class, 'device_relay']);
+$r->addRoute('POST', '/api/iot/device/{id:\d+}/relay-all',   [DeviceController::class, 'device_relay_all']);
 
 // OTA Endpoints
 $r->addRoute('GET', '/api/firmware/{device_type:\d+}/latest', [FirmwareController::class, 'ota_check']);

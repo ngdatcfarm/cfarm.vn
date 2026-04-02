@@ -442,7 +442,7 @@ class DeviceController
     public function device_ota(array $vars): void
     {
         $id = (int)$vars['id'];
-        
+
         // Get device info
         $stmt = $this->pdo->prepare("SELECT * FROM devices WHERE id = ?");
         $stmt->execute([$id]);
@@ -469,7 +469,7 @@ class DeviceController
         // The ESP32 needs to have OTA capability built-in
         // For now, we just send a notification and provide the download URL
         $otaUrl = 'http://app.cfarm.vn/api/firmware/download/' . $firmware['id'];
-        
+
         $payload = [
             'action' => 'ota',
             'url' => $otaUrl,
@@ -486,10 +486,97 @@ class DeviceController
         ")->execute([$id, json_encode($payload)]);
 
         $this->json([
-            'ok' => $sent, 
+            'ok' => $sent,
             'message' => $sent ? 'Đã gửi lệnh OTA' : 'Gửi thất bại',
             'firmware_url' => $otaUrl,
             'version' => $firmware['version']
+        ]);
+    }
+
+    /**
+     * POST /api/iot/device/{id}/relay - Điều khiển relay (bật/tắt)
+     */
+    public function device_relay(array $vars): void
+    {
+        $id = (int)$vars['id'];
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        $channel = (int)($data['channel'] ?? 0);
+        $state = $data['state'] ?? 'off';
+
+        if ($channel < 1 || $channel > 8) {
+            $this->json(['ok' => false, 'message' => 'Channel không hợp lệ'], 400);
+        }
+
+        if (!in_array($state, ['on', 'off'])) {
+            $this->json(['ok' => false, 'message' => 'State phải là on hoặc off'], 400);
+        }
+
+        // Get device info
+        $stmt = $this->pdo->prepare("SELECT * FROM devices WHERE id = ?");
+        $stmt->execute([$id]);
+        $device = $stmt->fetch(PDO::FETCH_OBJ);
+
+        if (!$device) {
+            $this->json(['ok' => false, 'message' => 'Thiết bị không tồn tại'], 404);
+        }
+
+        // Send relay command via cloud MQTT (dual-subscribe)
+        $sent = $this->mqtt->sendRelayCommandCloud($device->device_code, $channel, $state);
+
+        // Log command
+        $this->pdo->prepare("
+            INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
+            VALUES (?, 'relay', ?, 'cloud', 'sent', NOW())
+        ")->execute([$id, json_encode(['channel' => $channel, 'state' => $state])]);
+
+        $this->json([
+            'ok' => $sent,
+            'message' => $sent ? "Đã gửi lệnh bật relay $channel" : 'Gửi thất bại',
+            'channel' => $channel,
+            'state' => $state
+        ]);
+    }
+
+    /**
+     * POST /api/iot/device/{id}/relay-all - Điều khiển tất cả relay
+     */
+    public function device_relay_all(array $vars): void
+    {
+        $id = (int)$vars['id'];
+        $data = json_decode(file_get_contents('php://input'), true);
+        $state = $data['state'] ?? 'off';
+
+        if (!in_array($state, ['on', 'off'])) {
+            $this->json(['ok' => false, 'message' => 'State phải là on hoặc off'], 400);
+        }
+
+        // Get device info
+        $stmt = $this->pdo->prepare("SELECT * FROM devices WHERE id = ?");
+        $stmt->execute([$id]);
+        $device = $stmt->fetch(PDO::FETCH_OBJ);
+
+        if (!$device) {
+            $this->json(['ok' => false, 'message' => 'Thiết bị không tồn tại'], 404);
+        }
+
+        // Send all command via cloud MQTT (dual-subscribe)
+        $topic = $this->mqtt->toCloudTopic($device->device_code) . '/cmd';
+        $sent = $this->mqtt->publish($topic, [
+            'action' => 'all',
+            'state' => $state,
+        ]);
+
+        // Log command
+        $this->pdo->prepare("
+            INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
+            VALUES (?, 'all', ?, 'cloud', 'sent', NOW())
+        ")->execute([$id, json_encode(['state' => $state])]);
+
+        $this->json([
+            'ok' => $sent,
+            'message' => $sent ? "Đã gửi lệnh $state tất cả relay" : 'Gửi thất bại',
+            'state' => $state
         ]);
     }
 }
