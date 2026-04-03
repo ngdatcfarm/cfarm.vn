@@ -200,6 +200,7 @@ function toggleRelay(deviceId, channel, currentState) {
     fetch('/api/iot/device/' + deviceId + '/relay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ channel: channel, state: newState })
     })
     .then(r => r.json())
@@ -238,6 +239,7 @@ function setAllRelays(deviceId, state) {
     fetch('/api/iot/device/' + deviceId + '/relay-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ state: state })
     })
     .then(r => r.json())

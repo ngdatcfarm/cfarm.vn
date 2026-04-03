@@ -60,8 +60,8 @@ $dispatcher = FastRoute\simpleDispatcher(function (RouteCollector $r) {
 // --- auth check ---
 require_once ROOT_PATH . '/app/shared/auth/auth.php';
 $public_routes = ['/login', '/logout'];
-// API sync endpoints dùng Bearer token riêng, không cần session auth
-$api_prefixes = ['/api/sync/'];
+// API endpoints dùng Bearer token hoặc session auth
+$api_prefixes = ['/api/sync/', '/api/iot/'];
 $current_path  = strtok($_SERVER['REQUEST_URI'], '?');
 $is_api_route = false;
 foreach ($api_prefixes as $prefix) {
