@@ -528,11 +528,15 @@ class DeviceController
             // Send relay command via cloud MQTT (dual-subscribe)
             $sent = $this->mqtt->sendRelayCommandCloud($device->device_code, $channel, $state);
 
-            // Log command
-            $this->pdo->prepare("
-                INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
-                VALUES (?, 'relay', ?, 'cloud', 'sent', NOW())
-            ")->execute([$id, json_encode(['channel' => $channel, 'state' => $state])]);
+            // Log command (skip if table/column issue)
+            try {
+                $this->pdo->prepare("
+                    INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
+                    VALUES (?, 'relay', ?, 'cloud', 'sent', NOW())
+                ")->execute([$id, json_encode(['channel' => $channel, 'state' => $state])]);
+            } catch (Throwable $e) {
+                error_log("[device_relay] Log error: " . $e->getMessage());
+            }
 
             $this->json([
                 'ok' => $sent,
@@ -578,11 +582,15 @@ class DeviceController
                 'state' => $state,
             ]);
 
-            // Log command
-            $this->pdo->prepare("
-                INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
-                VALUES (?, 'all', ?, 'cloud', 'sent', NOW())
-            ")->execute([$id, json_encode(['state' => $state])]);
+            // Log command (skip if table/column issue)
+            try {
+                $this->pdo->prepare("
+                    INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
+                    VALUES (?, 'all', ?, 'cloud', 'sent', NOW())
+                ")->execute([$id, json_encode(['state' => $state])]);
+            } catch (Throwable $e) {
+                error_log("[device_relay_all] Log error: " . $e->getMessage());
+            }
 
             $this->json([
                 'ok' => $sent,
