@@ -225,6 +225,7 @@ $r->addRoute('GET', '/reports/{id}',  [ReportController::class, 'show']);
 // Device Controller
 use App\Interfaces\Http\Controllers\Web\IoT\DeviceController;
 $r->addRoute('GET',  '/settings/iot',                        [DeviceController::class, 'settings']);
+$r->addRoute('GET',  '/iot/',                                 [DeviceController::class, 'index']);
 $r->addRoute('GET',  '/iot/devices',                         [DeviceController::class, 'index']);
 $r->addRoute('POST', '/settings/iot/device/store',           [DeviceController::class, 'device_store']);
 $r->addRoute('POST', '/settings/iot/device/{id:\d+}/update',[DeviceController::class, 'device_update']);
