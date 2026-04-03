@@ -498,44 +498,52 @@ class DeviceController
      */
     public function device_relay(array $vars): void
     {
-        $id = (int)$vars['id'];
-        $data = json_decode(file_get_contents('php://input'), true);
+        try {
+            $id = (int)$vars['id'];
+            $data = json_decode(file_get_contents('php://input'), true);
 
-        $channel = (int)($data['channel'] ?? 0);
-        $state = $data['state'] ?? 'off';
+            $channel = (int)($data['channel'] ?? 0);
+            $state = $data['state'] ?? 'off';
 
-        if ($channel < 1 || $channel > 8) {
-            $this->json(['ok' => false, 'message' => 'Channel không hợp lệ'], 400);
+            if ($channel < 1 || $channel > 8) {
+                $this->json(['ok' => false, 'message' => 'Channel không hợp lệ'], 400);
+                return;
+            }
+
+            if (!in_array($state, ['on', 'off'])) {
+                $this->json(['ok' => false, 'message' => 'State phải là on hoặc off'], 400);
+                return;
+            }
+
+            // Get device info
+            $stmt = $this->pdo->prepare("SELECT * FROM devices WHERE id = ?");
+            $stmt->execute([$id]);
+            $device = $stmt->fetch(PDO::FETCH_OBJ);
+
+            if (!$device) {
+                $this->json(['ok' => false, 'message' => 'Thiết bị không tồn tại'], 404);
+                return;
+            }
+
+            // Send relay command via cloud MQTT (dual-subscribe)
+            $sent = $this->mqtt->sendRelayCommandCloud($device->device_code, $channel, $state);
+
+            // Log command
+            $this->pdo->prepare("
+                INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
+                VALUES (?, 'relay', ?, 'cloud', 'sent', NOW())
+            ")->execute([$id, json_encode(['channel' => $channel, 'state' => $state])]);
+
+            $this->json([
+                'ok' => $sent,
+                'message' => $sent ? "Đã gửi lệnh bật relay $channel" : 'Gửi thất bại',
+                'channel' => $channel,
+                'state' => $state
+            ]);
+        } catch (Throwable $e) {
+            error_log("[device_relay] Error: " . $e->getMessage());
+            $this->json(['ok' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
         }
-
-        if (!in_array($state, ['on', 'off'])) {
-            $this->json(['ok' => false, 'message' => 'State phải là on hoặc off'], 400);
-        }
-
-        // Get device info
-        $stmt = $this->pdo->prepare("SELECT * FROM devices WHERE id = ?");
-        $stmt->execute([$id]);
-        $device = $stmt->fetch(PDO::FETCH_OBJ);
-
-        if (!$device) {
-            $this->json(['ok' => false, 'message' => 'Thiết bị không tồn tại'], 404);
-        }
-
-        // Send relay command via cloud MQTT (dual-subscribe)
-        $sent = $this->mqtt->sendRelayCommandCloud($device->device_code, $channel, $state);
-
-        // Log command
-        $this->pdo->prepare("
-            INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
-            VALUES (?, 'relay', ?, 'cloud', 'sent', NOW())
-        ")->execute([$id, json_encode(['channel' => $channel, 'state' => $state])]);
-
-        $this->json([
-            'ok' => $sent,
-            'message' => $sent ? "Đã gửi lệnh bật relay $channel" : 'Gửi thất bại',
-            'channel' => $channel,
-            'state' => $state
-        ]);
     }
 
     /**
@@ -543,40 +551,47 @@ class DeviceController
      */
     public function device_relay_all(array $vars): void
     {
-        $id = (int)$vars['id'];
-        $data = json_decode(file_get_contents('php://input'), true);
-        $state = $data['state'] ?? 'off';
+        try {
+            $id = (int)$vars['id'];
+            $data = json_decode(file_get_contents('php://input'), true);
+            $state = $data['state'] ?? 'off';
 
-        if (!in_array($state, ['on', 'off'])) {
-            $this->json(['ok' => false, 'message' => 'State phải là on hoặc off'], 400);
+            if (!in_array($state, ['on', 'off'])) {
+                $this->json(['ok' => false, 'message' => 'State phải là on hoặc off'], 400);
+                return;
+            }
+
+            // Get device info
+            $stmt = $this->pdo->prepare("SELECT * FROM devices WHERE id = ?");
+            $stmt->execute([$id]);
+            $device = $stmt->fetch(PDO::FETCH_OBJ);
+
+            if (!$device) {
+                $this->json(['ok' => false, 'message' => 'Thiết bị không tồn tại'], 404);
+                return;
+            }
+
+            // Send all command via cloud MQTT (dual-subscribe)
+            $topic = $this->mqtt->toCloudTopic($device->device_code) . '/cmd';
+            $sent = $this->mqtt->publish($topic, [
+                'action' => 'all',
+                'state' => $state,
+            ]);
+
+            // Log command
+            $this->pdo->prepare("
+                INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
+                VALUES (?, 'all', ?, 'cloud', 'sent', NOW())
+            ")->execute([$id, json_encode(['state' => $state])]);
+
+            $this->json([
+                'ok' => $sent,
+                'message' => $sent ? "Đã gửi lệnh $state tất cả relay" : 'Gửi thất bại',
+                'state' => $state
+            ]);
+        } catch (Throwable $e) {
+            error_log("[device_relay_all] Error: " . $e->getMessage());
+            $this->json(['ok' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
         }
-
-        // Get device info
-        $stmt = $this->pdo->prepare("SELECT * FROM devices WHERE id = ?");
-        $stmt->execute([$id]);
-        $device = $stmt->fetch(PDO::FETCH_OBJ);
-
-        if (!$device) {
-            $this->json(['ok' => false, 'message' => 'Thiết bị không tồn tại'], 404);
-        }
-
-        // Send all command via cloud MQTT (dual-subscribe)
-        $topic = $this->mqtt->toCloudTopic($device->device_code) . '/cmd';
-        $sent = $this->mqtt->publish($topic, [
-            'action' => 'all',
-            'state' => $state,
-        ]);
-
-        // Log command
-        $this->pdo->prepare("
-            INSERT INTO device_commands (device_id, command_type, payload, source, status, sent_at)
-            VALUES (?, 'all', ?, 'cloud', 'sent', NOW())
-        ")->execute([$id, json_encode(['state' => $state])]);
-
-        $this->json([
-            'ok' => $sent,
-            'message' => $sent ? "Đã gửi lệnh $state tất cả relay" : 'Gửi thất bại',
-            'state' => $state
-        ]);
     }
 }
