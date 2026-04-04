@@ -5,7 +5,15 @@ namespace App\Interfaces\Http\Controllers\Web\Sync;
 use PDO;
 
 /**
- * SyncController - Nhận/gửi dữ liệu đồng bộ giữa cloud và local server.
+ * SyncController - Bidirectional sync between cloud and local server.
+ *
+ * Data Flow:
+ *   LOCAL → CLOUD: care_feeds, care_deaths, care_medications, care_sales,
+ *                 care_litters, care_expenses, care_weights, cycles, devices,
+ *                 sensor_data, inventory_transactions, equipment, etc.
+ *   CLOUD → LOCAL: reference data (farms, barns, warehouses, products,
+ *                 suppliers, feed_brands, feed_types, medications,
+ *                 vaccine_programs, device_types, equipment_types, sensor_types)
  *
  * Endpoints:
  *   POST /api/sync/receive       - Nhận record changes từ local
@@ -56,6 +64,14 @@ class SyncController
         return $row && !empty($row['value']) && hash_equals($row['value'], $token);
     }
 
+    /**
+     * Chuyển đổi datetime MySQL sang ISO 8601 cho JSON response.
+     */
+    private function to_iso(string $value): string
+    {
+        return date('c', strtotime($value));
+    }
+
     // ── 1. POST /api/sync/receive ───────────────────
     // Local đẩy data lên cloud (care records, cycles, devices...)
 
@@ -83,7 +99,6 @@ class SyncController
             }
         }
 
-        // Ghi log
         $this->log_sync('receive', $received, empty($errors) ? 'ok' : 'partial',
             empty($errors) ? null : json_encode($errors));
 
@@ -91,7 +106,7 @@ class SyncController
     }
 
     // ── 2. GET /api/sync/changes ────────────────────
-    // Local pull config data từ cloud
+    // Local pull config data từ cloud (reference data - cloud là master)
 
     public function changes(array $vars): void
     {
@@ -101,42 +116,57 @@ class SyncController
         }
 
         $since = $_GET['since'] ?? '2000-01-01T00:00:00';
-        // Chuyển ISO format sang MySQL datetime
         $since_dt = date('Y-m-d H:i:s', strtotime($since));
 
-        // Các bảng config mà cloud là master
+        // Reference data: cloud là master, local pull về
+        // Tier 1: Core catalogs
+        // Tier 2: Infrastructure
+        // Tier 3: Operational config
         $config_tables = [
-            'barns'                => 'updated_at',
-            'cycles'               => 'updated_at',
-            'cycle_splits'         => 'created_at',
-            'feed_brands'          => 'updated_at',
-            'feed_types'           => 'updated_at',
-            'medications'          => 'updated_at',
-            'suppliers'            => 'updated_at',
-            'vaccine_programs'     => 'updated_at',
-            'vaccine_program_items'=> 'updated_at',
-            'notification_rules'   => 'updated_at',
-            'firmwares'            => 'created_at',
+            // Tier 1: Reference catalogs (Cloud master → Local)
+            'farms'                  => 'updated_at',
+            'suppliers'              => 'updated_at',
+            'products'               => 'updated_at',
+            'feed_brands'            => 'updated_at',
+            'feed_types'             => 'updated_at',
+            'medications'            => 'updated_at',
+            'vaccine_programs'       => 'updated_at',
+            'vaccine_program_items'  => 'updated_at',
+            'device_types'           => 'updated_at',
+            'equipment_types'        => 'updated_at',
+            'sensor_types'           => 'updated_at',
+            // Tier 2: Infrastructure (Cloud master → Local)
+            'barns'                  => 'updated_at',
+            'warehouses'             => 'updated_at',
+            'warehouse_zones'        => 'updated_at',
+            'devices'                => 'updated_at',
+            'device_channels'        => 'updated_at',
+            'equipment'              => 'updated_at',
+            'sensors'                => 'updated_at',
+            // Tier 3: Operational config
+            'cycles'                 => 'updated_at',
+            'cycle_splits'           => 'created_at',
+            'cycle_feed_programs'    => 'updated_at',
+            'cycle_feed_program_items'=> 'updated_at',
+            'cycle_feed_stages'      => 'updated_at',
+            'curtain_configs'        => 'updated_at',
+            'care_litters'           => 'updated_at',
+            'care_expenses'          => 'updated_at',
+            'vaccine_schedules'     => 'updated_at',
+            'feed_trough_checks'     => 'updated_at',
+            'weight_reminders'       => 'updated_at',
+            // Legacy
+            'notification_rules'     => 'updated_at',
+            'firmwares'              => 'created_at',
         ];
 
         $items = [];
         foreach ($config_tables as $table => $time_col) {
             try {
-                // Kiểm tra bảng có tồn tại không
-                $check = $this->pdo->query("SHOW TABLES LIKE '{$table}'");
-                if ($check->rowCount() === 0) continue;
-
-                // Kiểm tra cột thời gian có tồn tại không
-                $col_check = $this->pdo->query(
-                    "SHOW COLUMNS FROM `{$table}` LIKE '{$time_col}'"
-                );
-                if ($col_check->rowCount() === 0) {
-                    // Dùng created_at nếu không có updated_at
+                if (!$this->table_exists($table)) continue;
+                if (!$this->column_exists($table, $time_col)) {
                     $time_col = 'created_at';
-                    $col_check2 = $this->pdo->query(
-                        "SHOW COLUMNS FROM `{$table}` LIKE 'created_at'"
-                    );
-                    if ($col_check2->rowCount() === 0) continue;
+                    if (!$this->column_exists($table, $time_col)) continue;
                 }
 
                 $stmt = $this->pdo->prepare(
@@ -146,12 +176,7 @@ class SyncController
                 $rows = $stmt->fetchAll();
 
                 foreach ($rows as $row) {
-                    // Chuyển datetime → ISO
-                    foreach ($row as $k => $v) {
-                        if ($v instanceof \DateTime || (is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}/', $v) && strlen($v) > 10)) {
-                            $row[$k] = date('c', strtotime($v));
-                        }
-                    }
+                    $row = $this->convert_datetimes($row);
                     $items[] = [
                         'table'   => $table,
                         'action'  => 'update',
@@ -217,7 +242,7 @@ class SyncController
     }
 
     // ── 4. POST /api/sync/device-states ─────────────
-    // Nhận trạng thái thiết bị từ local - TỰ TẠO device nếu chưa có (cloud theo local)
+    // Nhận trạng thái thiết bị từ local - TỰ TẠO device nếu chưa có
 
     public function device_states(array $vars): void
     {
@@ -236,14 +261,11 @@ class SyncController
                 $device_code = $item['device_code'] ?? null;
                 if (!$device_code) continue;
 
-                // Check if device exists
                 $check = $this->pdo->prepare("SELECT id FROM devices WHERE device_code = ?");
                 $check->execute([$device_code]);
                 $exists = $check->fetch() !== false;
 
                 if (!$exists) {
-                    // Auto-create device from local data
-                    // Use device_code as default name, default to relay type (id=1)
                     $mqtt_topic = 'cfarm/' . $device_code;
                     $stmt = $this->pdo->prepare("
                         INSERT INTO devices (device_code, name, device_type_id, mqtt_topic, is_online, last_seen, ip_address, firmware_version, created_at, updated_at)
@@ -252,7 +274,7 @@ class SyncController
                     $stmt->execute([
                         ':device_code'      => $device_code,
                         ':name'            => $item['name'] ?? $device_code,
-                        ':type_id'         => $item['device_type_id'] ?? 1, // default relay type
+                        ':type_id'         => $item['device_type_id'] ?? 1,
                         ':mqtt_topic'      => $item['mqtt_topic'] ?? $mqtt_topic,
                         ':is_online'       => $item['is_online'] ? 1 : 0,
                         ':last_seen'       => $item['last_seen'] ? date('Y-m-d H:i:s', strtotime($item['last_seen'])) : null,
@@ -263,7 +285,6 @@ class SyncController
                     $received++;
                     error_log("[Sync] Auto-created device {$device_code} on cloud");
                 } else {
-                    // Update existing device
                     $stmt = $this->pdo->prepare("
                         UPDATE devices SET
                             is_online = :is_online,
@@ -287,7 +308,6 @@ class SyncController
                     if ($stmt->rowCount() > 0) $received++;
                 }
 
-                // Also sync device_channels if provided
                 if (!empty($item['channels']) && is_array($item['channels'])) {
                     $this->sync_device_channels($device_code, $item['channels']);
                 }
@@ -299,11 +319,9 @@ class SyncController
         $this->json(true, ['received' => $received, 'created' => $created]);
     }
 
-    // Sync device channels from local to cloud
     private function sync_device_channels(string $device_code, array $channels): void
     {
         try {
-            // Get device_id
             $stmt = $this->pdo->prepare("SELECT id FROM devices WHERE device_code = ?");
             $stmt->execute([$device_code]);
             $row = $stmt->fetch();
@@ -314,7 +332,6 @@ class SyncController
                 $channel_number = $ch['channel_number'] ?? null;
                 if (!$channel_number) continue;
 
-                // Upsert channel
                 $stmt = $this->pdo->prepare("
                     INSERT INTO device_channels (device_id, channel_number, name, channel_type, gpio_pin, is_active, sort_order)
                     VALUES (:device_id, :channel_number, :name, :channel_type, :gpio_pin, :is_active, :sort_order)
@@ -345,8 +362,6 @@ class SyncController
 
     public function send_command(array $vars): void
     {
-        // Endpoint này cloud gọi local, không phải ngược lại
-        // Lưu ở đây để tham khảo cách gửi
         $body = $this->get_json_body();
         $local_ip = $body['local_ip'] ?? null;
         $command = $body['command'] ?? [];
@@ -356,7 +371,6 @@ class SyncController
             return;
         }
 
-        // Lấy local_token để gọi local server
         $stmt = $this->pdo->prepare("SELECT value FROM sync_config WHERE `key` = 'api_token'");
         $stmt->execute();
         $row = $stmt->fetch();
@@ -402,22 +416,24 @@ class SyncController
             return;
         }
 
-        // Lấy config
         $stmt = $this->pdo->query("SELECT `key`, value FROM sync_config");
         $config = [];
         while ($row = $stmt->fetch()) {
             $config[$row['key']] = $row['value'];
         }
 
-        // Lấy sync logs gần nhất
         $logs = $this->pdo->query(
             "SELECT * FROM sync_log ORDER BY created_at DESC LIMIT 10"
         )->fetchAll();
 
-        // Đếm queue
-        $queue_count = (int) $this->pdo->query(
-            "SELECT COUNT(*) FROM sync_queue WHERE synced = 0"
-        )->fetchColumn();
+        $queue_count = 0;
+        try {
+            $queue_count = (int) $this->pdo->query(
+                "SELECT COUNT(*) FROM sync_queue WHERE synced = 0"
+            )->fetchColumn();
+        } catch (\Throwable $e) {
+            // sync_queue might not exist in old cloud DB
+        }
 
         $this->json(true, [
             'enabled'     => ($config['enabled'] ?? 'false') === 'true',
@@ -427,37 +443,88 @@ class SyncController
         ]);
     }
 
-    // ── Apply a single change to local DB ───────────
+    // ── Helper: Check table/column existence ─────────
+
+    private function table_exists(string $table): bool
+    {
+        static $cache = [];
+        if (!isset($cache[$table])) {
+            $check = $this->pdo->query("SHOW TABLES LIKE '{$table}'");
+            $cache[$table] = $check->rowCount() > 0;
+        }
+        return $cache[$table];
+    }
+
+    private function column_exists(string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = "{$table}.{$column}";
+        if (!isset($cache[$key])) {
+            $check = $this->pdo->query("SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
+            $cache[$key] = $check->rowCount() > 0;
+        }
+        return $cache[$key];
+    }
+
+    private function convert_datetimes(array $row): array
+    {
+        foreach ($row as $k => $v) {
+            if ($v instanceof \DateTime || (is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}/', $v) && strlen((string)$v) > 10)) {
+                $row[$k] = $this->to_iso((string)$v);
+            }
+        }
+        return $row;
+    }
+
+    // ── Apply a single change from local to cloud DB ─
 
     private function apply_change(array $item): void
     {
-        $table  = $item['table'] ?? '';
-        $action = $item['action'] ?? '';
+        $table   = $item['table'] ?? '';
+        $action  = $item['action'] ?? '';
         $payload = $item['payload'] ?? [];
 
         if (empty($table) || empty($payload)) {
             throw new \InvalidArgumentException("Missing table or payload");
         }
 
-        // Whitelist các bảng được phép sync
+        // Whitelist: tất cả bảng local được phép push lên cloud
+        // CLOUD ← LOCAL push tables
         $allowed_tables = [
-            'barns', 'cycles', 'cycle_splits',
-            'care_feeds', 'care_deaths', 'care_medications',
-            'weight_sessions', 'weight_details', 'care_sales',
+            // Farm infrastructure
+            'farms', 'barns',
+            'warehouses', 'warehouse_zones',
+            'devices', 'device_channels', 'device_states', 'device_state_log',
+            'device_commands', 'device_telemetry', 'device_alerts',
+            'device_config_versions', 'device_firmwares',
+            'equipment', 'equipment_parts', 'equipment_readings',
+            'equipment_performance', 'equipment_assignment_log', 'equipment_command_log',
+            'sensors', 'sensor_types',
+            // Operations
+            'cycles', 'cycle_splits', 'cycle_daily_snapshots',
+            'cycle_feed_programs', 'cycle_feed_program_items', 'cycle_feed_stages',
+            'care_feeds', 'care_deaths', 'care_medications', 'care_sales',
+            'care_litters', 'care_expenses', 'care_weights',
+            'weight_samples', 'feed_trough_checks', 'weight_reminders',
             'health_notes', 'vaccine_schedules',
-            'devices', 'alerts', 'firmwares',
-            'feed_brands', 'feed_types', 'medications', 'suppliers',
+            // Inventory & Purchasing
+            'inventory', 'inventory_transactions', 'inventory_alerts',
+            'inventory_snapshots', 'stock_valuation',
+            'purchase_orders', 'purchase_order_items',
+            // Reference data (bidirectional - local can also push)
+            'products', 'suppliers',
+            'feed_brands', 'feed_types', 'medications',
             'vaccine_programs', 'vaccine_program_items',
-            'notification_rules',
+            'device_types', 'equipment_types', 'sensor_types',
+            // Utilities
+            'curtain_configs', 'notification_rules', 'firmwares',
         ];
 
         if (!in_array($table, $allowed_tables)) {
             throw new \InvalidArgumentException("Table not allowed: {$table}");
         }
 
-        // Kiểm tra bảng tồn tại
-        $check = $this->pdo->query("SHOW TABLES LIKE '{$table}'");
-        if ($check->rowCount() === 0) {
+        if (!$this->table_exists($table)) {
             throw new \InvalidArgumentException("Table does not exist: {$table}");
         }
 
@@ -470,17 +537,15 @@ class SyncController
             return;
         }
 
-        // INSERT or UPDATE (upsert)
         $id = $payload['id'] ?? null;
         if (!$id) {
             throw new \InvalidArgumentException("Missing id in payload");
         }
 
-        // Lấy danh sách cột thực tế của bảng
+        // Lấy danh sách cột thực tế của bảng (để filter payload)
         $col_stmt = $this->pdo->query("SHOW COLUMNS FROM `{$table}`");
         $existing_cols = array_column($col_stmt->fetchAll(), 'Field');
 
-        // Lọc payload chỉ giữ cột tồn tại
         $filtered = [];
         foreach ($payload as $key => $value) {
             if (in_array($key, $existing_cols)) {
@@ -491,12 +556,12 @@ class SyncController
         if (empty($filtered)) return;
 
         // Build UPSERT query
-        $columns = array_keys($filtered);
+        $columns    = array_keys($filtered);
         $placeholders = array_map(fn($c) => ":{$c}", $columns);
-        $updates = array_map(fn($c) => "`{$c}` = VALUES(`{$c}`)", $columns);
-        $col_list = implode(', ', array_map(fn($c) => "`{$c}`", $columns));
-        $ph_list  = implode(', ', $placeholders);
-        $upd_list = implode(', ', $updates);
+        $updates    = array_map(fn($c) => "`{$c}` = VALUES(`{$c}`)", $columns);
+        $col_list   = implode(', ', array_map(fn($c) => "`{$c}`", $columns));
+        $ph_list    = implode(', ', $placeholders);
+        $upd_list   = implode(', ', $updates);
 
         $sql = "INSERT INTO `{$table}` ({$col_list}) VALUES ({$ph_list})
                 ON DUPLICATE KEY UPDATE {$upd_list}";
@@ -509,7 +574,7 @@ class SyncController
         $stmt->execute($params);
     }
 
-    // ── Sync Log ────────────────────────────────────
+    // ── Sync Log ───────────────────────────────────
 
     private function log_sync(string $direction, int $count, string $status, ?string $error = null): void
     {
