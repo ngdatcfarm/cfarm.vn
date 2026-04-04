@@ -86,6 +86,10 @@ DROP TABLE IF EXISTS `device_alerts`;
 DROP TABLE IF EXISTS `cycles`;
 DROP TABLE IF EXISTS `barns`;
 DROP TABLE IF EXISTS `farms`;
+DROP TABLE IF EXISTS `sync_queue`;
+DROP TABLE IF EXISTS `sync_log`;
+DROP TABLE IF EXISTS `sync_config`;
+DROP TABLE IF EXISTS `sync_lock`;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
