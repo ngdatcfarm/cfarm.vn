@@ -664,9 +664,9 @@ CREATE TABLE `equipment_command_log` (
 -- --------------------------------------------------------
 CREATE TABLE `sensors` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `sensor_type_id` INT NOT NULL,
+  `sensor_type_id` INT UNSIGNED,
   `barn_id` VARCHAR(50) DEFAULT NULL,
-  `device_id` VARCHAR(50) DEFAULT NULL COMMENT 'Link to IoT device',
+  `device_id` BIGINT UNSIGNED DEFAULT NULL COMMENT 'Link to IoT device',
   `name` VARCHAR(200) NOT NULL,
   `location` VARCHAR(100) COMMENT 'inside, outside, north_corner',
   `calibration_date` DATE,
@@ -675,7 +675,8 @@ CREATE TABLE `sensors` (
   `notes` TEXT,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`sensor_type_id`) REFERENCES `sensor_types`(`id`) ON DELETE CASCADE,
-  FOREIGN KEY (`barn_id`) REFERENCES `barns`(`id`) ON DELETE SET NULL
+  FOREIGN KEY (`barn_id`) REFERENCES `barns`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`device_id`) REFERENCES `devices`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -683,7 +684,7 @@ CREATE TABLE `sensors` (
 -- --------------------------------------------------------
 CREATE TABLE `sensor_threshold_configs` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `sensor_id` INT NOT NULL,
+  `sensor_id` INT UNSIGNED,
   `alert_type` VARCHAR(20) NOT NULL COMMENT 'high, low',
   `threshold_value` DECIMAL(10,2),
   `enabled` BOOLEAN DEFAULT TRUE,
@@ -696,7 +697,7 @@ CREATE TABLE `sensor_threshold_configs` (
 -- --------------------------------------------------------
 CREATE TABLE `sensor_calibrations` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `sensor_id` INT NOT NULL,
+  `sensor_id` INT UNSIGNED,
   `calibration_date` DATE NOT NULL,
   `reference_value` DECIMAL(10,2),
   `measured_value` DECIMAL(10,2),
@@ -712,7 +713,7 @@ CREATE TABLE `sensor_calibrations` (
 -- --------------------------------------------------------
 CREATE TABLE `sensor_maintenance_log` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `sensor_id` INT NOT NULL,
+  `sensor_id` INT UNSIGNED,
   `maintenance_type` VARCHAR(50) NOT NULL COMMENT 'cleaning, repair, replacement, relocation',
   `performed_date` DATE NOT NULL,
   `description` TEXT,
@@ -1065,7 +1066,7 @@ CREATE TABLE `curtain_configs` (
 -- --------------------------------------------------------
 CREATE TABLE `sensor_data` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `sensor_id` INT NOT NULL,
+  `sensor_id` INT UNSIGNED,
   `barn_id` VARCHAR(50) DEFAULT NULL,
   `cycle_id` BIGINT UNSIGNED DEFAULT NULL,
   `day_age` SMALLINT UNSIGNED DEFAULT NULL,
@@ -1083,7 +1084,7 @@ CREATE TABLE `sensor_data` (
 -- --------------------------------------------------------
 CREATE TABLE `sensor_alerts` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `sensor_id` INT NOT NULL,
+  `sensor_id` INT UNSIGNED,
   `alert_type` VARCHAR(50) NOT NULL COMMENT 'high, low, offline, spike',
   `threshold_value` DECIMAL(10,2),
   `actual_value` DECIMAL(10,2),
@@ -1100,7 +1101,7 @@ CREATE TABLE `sensor_alerts` (
 -- --------------------------------------------------------
 CREATE TABLE `sensor_daily_summary` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `sensor_id` INT NOT NULL,
+  `sensor_id` INT UNSIGNED,
   `date` DATE NOT NULL,
   `avg_value` DECIMAL(10,2),
   `min_value` DECIMAL(10,2),
