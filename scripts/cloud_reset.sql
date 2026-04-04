@@ -453,8 +453,8 @@ CREATE TABLE `device_channels` (
   `relay_type` VARCHAR(20) COMMENT 'nc, no',
   `pwm_frequency` INT COMMENT 'Hz for dimming',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`device_id`) REFERENCES `devices`(`id`) ON DELETE CASCADE,
-  FOREIGN KEY (`equipment_id`) REFERENCES `equipment`(`id`) ON DELETE SET NULL
+  FOREIGN KEY (`device_id`) REFERENCES `devices`(`id`) ON DELETE CASCADE
+  -- equipment_id FK added via ALTER TABLE after equipment table exists
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
