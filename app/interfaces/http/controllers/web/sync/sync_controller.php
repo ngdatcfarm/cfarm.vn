@@ -548,9 +548,15 @@ class SyncController
 
         $filtered = [];
         foreach ($payload as $key => $value) {
-            if (in_array($key, $existing_cols)) {
-                $filtered[$key] = $value;
+            if (!in_array($key, $existing_cols)) continue;
+
+            // Convert ISO 8601 datetime strings to MySQL format
+            if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/', $value)) {
+                $value = preg_replace('/[T-Z]/', ' ', $value);
+                $value = trim(substr($value, 0, 19));
             }
+
+            $filtered[$key] = $value;
         }
 
         if (empty($filtered)) return;
