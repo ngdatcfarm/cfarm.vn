@@ -84,6 +84,7 @@ DROP TABLE IF EXISTS `device_config_versions`;
 DROP TABLE IF EXISTS `device_telemetry`;
 DROP TABLE IF EXISTS `device_alerts`;
 DROP TABLE IF EXISTS `cycles`;
+DROP TABLE IF EXISTS `care_weights`;
 DROP TABLE IF EXISTS `barns`;
 DROP TABLE IF EXISTS `farms`;
 DROP TABLE IF EXISTS `sync_queue`;
