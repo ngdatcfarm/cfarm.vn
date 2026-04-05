@@ -1146,7 +1146,7 @@ CREATE TABLE `sensor_daily_summary` (
 CREATE TABLE `inventory_transactions` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `product_id` INT UNSIGNED NOT NULL,
-  `warehouse_id` VARCHAR(50) NOT NULL,
+  `warehouse_id` INT NOT NULL,
   `txn_type` ENUM('purchase','transfer_out','transfer_in','use_feed','use_medicine','use_litter','use_consumable','sell','adjust','dispose') NOT NULL,
   `quantity` DECIMAL(12,2) NOT NULL,
   `reference_type` VARCHAR(50) DEFAULT NULL COMMENT 'care_feeds, care_medications, etc.',
@@ -1182,7 +1182,7 @@ CREATE TABLE `inventory_alerts` (
 -- --------------------------------------------------------
 CREATE TABLE `inventory_snapshots` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `warehouse_id` VARCHAR(50) NOT NULL,
+  `warehouse_id` INT NOT NULL,
   `snapshot_date` DATE NOT NULL,
   `total_items` INT,
   `total_quantity` DECIMAL(12,2),
@@ -1196,7 +1196,7 @@ CREATE TABLE `inventory_snapshots` (
 -- --------------------------------------------------------
 CREATE TABLE `stock_valuation` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `warehouse_id` VARCHAR(50) NOT NULL,
+  `warehouse_id` INT NOT NULL,
   `product_id` INT UNSIGNED NOT NULL,
   `valuation_date` DATE NOT NULL,
   `quantity` DECIMAL(12,2),
