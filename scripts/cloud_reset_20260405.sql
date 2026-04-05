@@ -424,7 +424,7 @@ CREATE TABLE `purchase_order_items` (
 -- --------------------------------------------------------
 CREATE TABLE `inventory` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `warehouse_id` VARCHAR(50) NOT NULL,
+  `warehouse_id` INT NOT NULL,
   `product_id` INT UNSIGNED NOT NULL,
   `batch_number` VARCHAR(50),
   `quantity` DECIMAL(12,2) NOT NULL DEFAULT 0,
