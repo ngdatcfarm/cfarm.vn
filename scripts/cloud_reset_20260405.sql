@@ -381,7 +381,7 @@ VALUES ('WH-CENTRAL', 'Kho tong - Thuoc & Vat tu tieu hao', TRUE, 'mixed', 'acti
 -- --------------------------------------------------------
 CREATE TABLE `warehouse_zones` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `warehouse_id` VARCHAR(50) NOT NULL,
+  `warehouse_id` INT NOT NULL,
   `name` VARCHAR(100) NOT NULL,
   `zone_type` ENUM('receiving','storage','quarantine','expired','returns') NOT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
