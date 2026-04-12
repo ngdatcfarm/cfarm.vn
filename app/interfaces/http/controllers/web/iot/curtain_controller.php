@@ -67,7 +67,7 @@ class CurtainController
      */
     public function control_page(array $vars): void
     {
-        $barn_id = (int)$vars['barn_id'];
+        $barn_id = $vars['barn_id']; // String (varchar) on cloud
 
         $barn = $this->pdo->prepare("SELECT * FROM barns WHERE id = ?");
         $barn->execute([$barn_id]);
