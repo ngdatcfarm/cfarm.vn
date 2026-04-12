@@ -189,7 +189,7 @@ ob_start();
 <script>
 const BARN_ID = '<?= e($barn_id) ?>';
 const ESP_DEVICE_ID = <?= $esp_device_id ? $esp_device_id : 'null' ?>;
-const BATS = <?= json_encode(array_values($bats)) ?>;
+const BATS = <?= json_encode(array_values($bats), JSON_UNESCAPED_UNICODE) ?>;
 const BAT_CODES = ['left_top', 'left_bottom', 'right_top', 'right_bottom'];
 const BAT_NAMES = {
     'left_top': 'Bạt trái trên',
