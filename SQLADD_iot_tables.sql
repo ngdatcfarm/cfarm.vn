@@ -38,9 +38,9 @@ CREATE TABLE IF NOT EXISTS curtain_configs (
 CREATE TABLE IF NOT EXISTS device_types (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    description TEXT,
-    relay_count TINYINT DEFAULT 4,
-    has_curtain_support TINYINT(1) DEFAULT 0,
+    description VARCHAR(255),
+    device_class ENUM('relay', 'sensor', 'mixed') DEFAULT 'relay',
+    total_channels INT DEFAULT 8,
     is_active TINYINT(1) DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -60,8 +60,8 @@ CREATE TABLE IF NOT EXISTS device_commands (
 );
 
 -- Insert default device types if not exist
-INSERT IGNORE INTO device_types (id, name, relay_count, has_curtain_support) VALUES
-(1, 'Relay 4CH', 4, 0),
-(2, 'Relay 8CH', 8, 0),
-(3, 'Relay 4CH + Curtain', 4, 1),
-(4, 'Relay 8CH + Curtain', 8, 1);
+INSERT IGNORE INTO device_types (name) VALUES
+('Relay 4CH'),
+('Relay 8CH'),
+('Relay 4CH + Curtain'),
+('Relay 8CH + Curtain');
