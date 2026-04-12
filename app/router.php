@@ -27,6 +27,10 @@ use App\Interfaces\Http\Controllers\Web\Settings\SettingsController;
 $r->addRoute('GET',  '/settings/notifications',        [SettingsController::class, 'notifications']);
 $r->addRoute('POST', '/settings/notifications/update',  [SettingsController::class, 'notifications_update']);
 
+// Bat Settings
+$r->addRoute('POST', '/settings/iot/bat/set-device',      [SettingsController::class, 'bat_set_device']);
+$r->addRoute('POST', '/settings/iot/bat/update-channel',  [SettingsController::class, 'bat_update_channel']);
+
 // =============================================================================
 // AUTH
 // =============================================================================
@@ -62,6 +66,7 @@ $r->addRoute('GET',  '/env/api/barn/{id:\d+}',    [EnvController::class, 'api_la
 use App\Interfaces\Http\Controllers\Web\IoT\DeviceController;
 use App\Interfaces\Http\Controllers\Web\IoT\CurtainController;
 use App\Interfaces\Http\Controllers\Web\IoT\CurtainSetupController;
+use App\Interfaces\Http\Controllers\Web\IoT\BatController;
 use App\Interfaces\Http\Controllers\Web\IoT\FirmwareController;
 use App\Interfaces\Http\Controllers\Web\IoT\Commands\DirectCommandController;
 
@@ -89,6 +94,12 @@ $r->addRoute('GET',  '/iot/control/{barn_id}',            [CurtainController::cl
 $r->addRoute('POST', '/iot/curtain/{id:\d+}/move',         [CurtainController::class, 'curtain_move']);
 $r->addRoute('POST', '/iot/curtain/{id:\d+}/stop',         [CurtainController::class, 'curtain_stop']);
 $r->addRoute('GET',  '/iot/curtain/{id:\d+}/status',       [CurtainController::class, 'curtain_status']);
+
+// Bat Control (Cloud reads synced bats data, commands go to local)
+$r->addRoute('GET',  '/iot/bat/{id:\d+}',             [BatController::class, 'status']);
+$r->addRoute('POST', '/iot/bat/{id:\d+}/up',          [BatController::class, 'move_up']);
+$r->addRoute('POST', '/iot/bat/{id:\d+}/down',        [BatController::class, 'move_down']);
+$r->addRoute('POST', '/iot/bat/{id:\d+}/stop',        [BatController::class, 'stop']);
 
 // Curtain Setup
 $r->addRoute('GET',  '/settings/iot/curtain/setup',        [CurtainSetupController::class, 'setup']);

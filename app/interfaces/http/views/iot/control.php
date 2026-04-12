@@ -1,253 +1,305 @@
 <?php
-$title = 'Điều khiển - ' . e($barn->name);
+$title = 'Điều khiển bạt - ' . e($barn->name);
 ob_start();
 ?>
 
 <div class="mb-4">
-    <a href="/settings/iot" class="text-sm text-blue-600 hover:underline">← IoT Settings</a>
+    <a href="/iot/control" class="text-sm text-blue-600 hover:underline">← Tất cả chuồng</a>
 </div>
 
 <!-- Header -->
-<div class="bg-blue-600 rounded-2xl p-4 mb-4">
+<div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-4 mb-4">
     <div class="flex items-center gap-3">
-        <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl">🏠</div>
+        <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl">🪟</div>
         <div>
             <div class="text-lg font-bold text-white"><?= e($barn->name) ?></div>
-            <div class="text-sm text-blue-200">Điều khiển bạt</div>
+            <div class="text-sm text-blue-200">Điều khiển 4 bạt thông gió</div>
         </div>
     </div>
 </div>
 
-<?php if (empty($curtains)): ?>
-<div class="text-center py-16 text-gray-400">
-    <div class="text-5xl mb-4">⚙️</div>
-    <p>Chưa có bạt nào được cấu hình</p>
-    <p class="text-xs mt-2">Thêm device và cấu hình bạt trong phần cài đặt</p>
-</div>
-<?php else: ?>
-
-<!-- Điều khiển tất cả -->
+<!-- ESP32 Device Selector -->
 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-4">
-    <div class="text-sm font-semibold mb-3">⚡ Điều khiển tất cả</div>
-    <div class="grid grid-cols-3 gap-2">
-        <button onclick="moveAllCurtains(100)"
-                class="bg-green-500 hover:bg-green-600 text-white text-sm font-semibold py-3 rounded-xl transition-colors">
-            ▲ Mở hết
-        </button>
-        <button onclick="stopAllCurtains()"
-                class="bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-3 rounded-xl transition-colors">
-            ■ Dừng
-        </button>
-        <button onclick="moveAllCurtains(0)"
-                class="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold py-3 rounded-xl transition-colors">
-            ▼ Đóng hết
-        </button>
+    <div class="flex items-center gap-3 mb-3">
+        <span class="text-xl">🎛️</span>
+        <div>
+            <div class="text-sm font-semibold">ESP32 Relay 8 kênh</div>
+            <div class="text-xs text-gray-400">1 ESP32 điều khiển tất cả 4 bạt</div>
+        </div>
     </div>
+    <select id="esp_device_select" class="w-full px-3 py-2 border rounded-lg text-sm"
+            onchange="setEspDevice(this.value)">
+        <option value="">-- Chọn ESP32 --</option>
+        <?php foreach ($devices as $d): ?>
+        <option value="<?= e($d->id) ?>" <?= ($d->id == $esp_device_id) ? 'selected' : '' ?>>
+            <?= e($d->name) ?> (<?= e($d->device_code) ?>) <?= $d->is_online ? '🟢' : '🔴' ?>
+        </option>
+        <?php endforeach; ?>
+    </select>
 </div>
 
-<!-- Danh sách bạt -->
-<div class="space-y-3">
-<?php foreach ($curtains as $cur): ?>
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4"
-         id="curtain_card_<?= e($cur->id) ?>">
-        <!-- Header -->
-        <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-lg">🪟</div>
-                <div>
-                    <div class="text-sm font-semibold"><?= e($cur->name) ?></div>
-                    <div class="text-xs text-gray-400">
-                        <?php if ($cur->is_online): ?>
-                        <span class="text-green-500">● Online</span>
-                        <?php else: ?>
-                        <span class="text-red-500">● Offline</span>
-                        <?php endif; ?>
-                        · Vị trí: <span id="cur_pos_label_<?= e($cur->id) ?>" class="font-semibold"><?= e($cur->real_position) ?>%</span>
-                        <span id="cur_moving_<?= e($cur->id) ?>" class="ml-1 <?= $cur->moving_state === 'idle' ? 'hidden' : '' ?>">
-                            <?php if ($cur->moving_state === 'moving_up'): ?>
-                                <span class="text-orange-500 animate-pulse">▲ Đang đóng...</span>
-                            <?php elseif ($cur->moving_state === 'moving_down'): ?>
-                                <span class="text-green-500 animate-pulse">▼ Đang mở...</span>
+<!-- Bat Grid 2x2 -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <?php foreach ($bats as $bat): ?>
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border transition-all overflow-hidden
+                <?= $bat['moving_state'] === 'up' ? 'border-green-400 ring-2 ring-green-200' : '' ?>
+                <?= $bat['moving_state'] === 'down' ? 'border-red-400 ring-2 ring-red-200' : '' ?>
+                <?= $bat['moving_state'] === 'stopped' ? 'border-gray-200 dark:border-gray-700' : '' ?>"
+         id="bat_card_<?= e($bat['code']) ?>">
+
+        <!-- Moving indicator -->
+        <?php if ($bat['moving_state'] !== 'stopped'): ?>
+        <div class="h-1 w-full <?= $bat['moving_state'] === 'up' ? 'bg-green-500' : 'bg-red-500' ?> animate-pulse"></div>
+        <?php endif; ?>
+
+        <div class="p-4">
+            <!-- Bat Header -->
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl"><?= $bat['icon'] ?></span>
+                    <div>
+                        <div class="font-bold text-gray-800 dark:text-gray-100"><?= e($bat['name']) ?></div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <?php if ($bat['device_id']): ?>
+                            <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">
+                                K<?= e($bat['up_channel']) ?> ↑ K<?= e($bat['down_channel']) ?> ↓
+                            </span>
+                            <?php else: ?>
+                            <span class="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">⚠️ Chưa gắn kênh</span>
                             <?php endif; ?>
-                        </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm font-bold <?= $bat['moving_state'] === 'up' ? 'text-green-600' : ($bat['moving_state'] === 'down' ? 'text-red-600' : 'text-gray-400') ?>">
+                        <?= $bat['moving_state'] === 'up' ? '↑ LÊN' : ($bat['moving_state'] === 'down' ? '↓ XUỐNG' : '■ DỪNG') ?>
+                    </div>
+                    <?php if ($bat['moving_state'] !== 'stopped'): ?>
+                    <div class="text-xs text-gray-400 mt-0.5" id="elapsed_<?= e($bat['code']) ?>">0s</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Position Display -->
+            <div class="mb-3">
+                <div class="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>0%</span>
+                    <span>Vị trí: <?= e($bat['position']) ?>%</span>
+                    <span>100%</span>
+                </div>
+                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
+                    <div class="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                         style="width: <?= e($bat['position']) ?>%"></div>
+                </div>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="flex gap-2">
+                <button onclick="moveBat('<?= e($bat['code']) ?>', 'up')"
+                        <?= $bat['moving_state'] !== 'stopped' || !$bat['device_id'] ? 'disabled' : '' ?>
+                        class="flex-1 py-3 px-3 rounded-xl font-bold text-white transition-all
+                               <?= $bat['moving_state'] === 'up' ? 'bg-green-600' : 'bg-green-500 hover:bg-green-600' ?>
+                               disabled:opacity-50 disabled:cursor-not-allowed">
+                    ↑
+                </button>
+                <button onclick="moveBat('<?= e($bat['code']) ?>', 'down')"
+                        <?= $bat['moving_state'] !== 'stopped' || !$bat['device_id'] ? 'disabled' : '' ?>
+                        class="flex-1 py-3 px-3 rounded-xl font-bold text-white transition-all
+                               <?= $bat['moving_state'] === 'down' ? 'bg-red-600' : 'bg-red-500 hover:bg-red-600' ?>
+                               disabled:opacity-50 disabled:cursor-not-allowed">
+                    ↓
+                </button>
+                <button onclick="stopBat('<?= e($bat['code']) ?>')"
+                        <?= $bat['moving_state'] === 'stopped' ? 'disabled' : '' ?>
+                        class="px-4 py-3 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all
+                               disabled:opacity-50 disabled:cursor-not-allowed">
+                    ■
+                </button>
+            </div>
+
+            <!-- Channel Config (inline) -->
+            <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-gray-400">Kênh Lên / Xuống</span>
+                    <div class="flex items-center gap-1">
+                        <select class="w-14 px-2 py-1 border rounded text-center text-xs"
+                                onchange="updateBatChannel('<?= e($bat['code']) ?>', 'up', this.value)">
+                            <?php for ($i = 1; $i <= 8; $i++): ?>
+                            <option value="<?= $i ?>" <?= ($bat['up_channel'] == $i) ? 'selected' : '' ?>>K<?= $i ?></option>
+                            <?php endfor; ?>
+                        </select>
+                        <span class="text-gray-300">/</span>
+                        <select class="w-14 px-2 py-1 border rounded text-center text-xs"
+                                onchange="updateBatChannel('<?= e($bat['code']) ?>', 'down', this.value)">
+                            <?php for ($i = 1; $i <= 8; $i++): ?>
+                            <option value="<?= $i ?>" <?= ($bat['down_channel'] == $i) ? 'selected' : '' ?>>K<?= $i ?></option>
+                            <?php endfor; ?>
+                        </select>
                     </div>
                 </div>
             </div>
-            <button onclick="stopCurtain(<?= e($cur->id) ?>)"
-                    class="bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-3 py-2 rounded-xl">
-                ■ DỪNG
-            </button>
-        </div>
-
-        <!-- Progress bar -->
-        <div class="relative h-4 bg-gray-100 dark:bg-gray-700 rounded-full mb-3 overflow-hidden">
-            <div id="cur_bar_<?= e($cur->id) ?>"
-                 class="absolute left-0 top-0 h-full bg-indigo-500 rounded-full transition-all duration-500"
-                 style="width: <?= e($cur->real_position) ?>%"></div>
-        </div>
-
-        <!-- Slider -->
-        <div class="flex items-center gap-3 mb-3">
-            <span class="text-xs text-gray-400 w-8">Đóng</span>
-            <input type="range" id="cur_slider_<?= e($cur->id) ?>" min="0" max="100" step="5"
-                   value="<?= e($cur->real_position) ?>"
-                   oninput="previewCurtain(<?= e($cur->id) ?>, this.value)"
-                   class="flex-1 accent-indigo-500">
-            <span class="text-xs text-gray-400 w-6">Mở</span>
-            <span id="cur_slider_val_<?= e($cur->id) ?>" class="text-sm font-bold text-indigo-600 w-10 text-right"><?= e($cur->real_position) ?>%</span>
-        </div>
-
-        <!-- Quick buttons -->
-        <div class="grid grid-cols-6 gap-1.5 mb-3">
-            <?php foreach ([0, 20, 40, 60, 80, 100] as $pct): ?>
-            <button onclick="moveCurtain(<?= e($cur->id) ?>, <?= $pct ?>)"
-                    class="py-2 text-xs font-semibold rounded-lg border transition-all
-                           <?= (int)$cur->real_position === $pct
-                               ? 'border-indigo-500 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30'
-                               : 'border-gray-200 dark:border-gray-600 text-gray-500 hover:border-indigo-400' ?>">
-                <?= $pct ?>%
-            </button>
-            <?php endforeach; ?>
-        </div>
-
-        <!-- Nút lên/xuống -->
-        <div class="grid grid-cols-2 gap-2 mt-3">
-            <button onclick="moveCurtain(<?= e($cur->id) ?>, 100)"
-                    class="bg-green-50 dark:bg-green-900/20 hover:bg-green-100 text-green-600 text-sm font-semibold py-2.5 rounded-xl border border-green-200 dark:border-green-800">
-                ▲ Mở hoàn toàn
-            </button>
-            <button onclick="moveCurtain(<?= e($cur->id) ?>, 0)"
-                    class="bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 text-orange-600 text-sm font-semibold py-2.5 rounded-xl border border-orange-200 dark:border-orange-800">
-                ▼ Đóng hoàn toàn
-            </button>
         </div>
     </div>
-<?php endforeach; ?>
+    <?php endforeach; ?>
 </div>
 
-<?php endif; ?>
+<!-- Recent Activity -->
+<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+        <div class="text-sm font-semibold">📋 Hoạt động gần đây</div>
+    </div>
+    <?php if (empty($logs)): ?>
+    <div class="p-8 text-center text-gray-400">
+        <div class="text-3xl mb-2">📭</div>
+        <div class="text-sm">Chưa có hoạt động nào</div>
+    </div>
+    <?php else: ?>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-4 py-2 text-left text-xs text-gray-500">Thời gian</th>
+                    <th class="px-4 py-2 text-left text-xs text-gray-500">Bạt</th>
+                    <th class="px-4 py-2 text-center text-xs text-gray-500">Hành động</th>
+                    <th class="px-4 py-2 text-center text-xs text-gray-500">Thời gian</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <?php foreach ($logs as $log): ?>
+                <tr>
+                    <td class="px-4 py-3 text-gray-600 dark:text-gray-300"><?= e($log['time']) ?></td>
+                    <td class="px-4 py-3 font-medium"><?= e($log['bat_name']) ?></td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
+                                    <?= $log['action'] === 'up' ? 'bg-green-100 text-green-700' : '' ?>
+                                    <?= $log['action'] === 'down' ? 'bg-red-100 text-red-700' : '' ?>
+                                    <?= $log['action'] === 'stop' ? 'bg-amber-100 text-amber-700' : '' ?>">
+                            <?= $log['action'] === 'up' ? '↑ LÊN' : ($log['action'] === 'down' ? '↓ XUỐNG' : '■ DỪNG') ?>
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-center text-gray-400"><?= e($log['duration']) ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
+</div>
 
 <script>
-const CURTAIN_IDS = [<?= implode(',', array_map(fn($c) => $c->id, $curtains ?? [])) ?>];
+const BARN_ID = '<?= e($barn_id) ?>';
+const ESP_DEVICE_ID = <?= $esp_device_id ? $esp_device_id : 'null' ?>;
+const BATS = <?= json_encode(array_values($bats)) ?>;
+const BAT_CODES = ['left_top', 'left_bottom', 'right_top', 'right_bottom'];
+const BAT_NAMES = {
+    'left_top': 'Bạt trái trên',
+    'left_bottom': 'Bạt trái dưới',
+    'right_top': 'Bạt phải trên',
+    'right_bottom': 'Bạt phải dưới'
+};
+const BAT_ICONS = {
+    'left_top': '↖️',
+    'left_bottom': '↙️',
+    'right_top': '↗️',
+    'right_bottom': '↘️'
+};
 
-function previewCurtain(id, val) {
-    document.getElementById('cur_slider_val_' + id).textContent = val + '%';
-    document.getElementById('cur_bar_' + id).style.width = val + '%';
+function setEspDevice(deviceId) {
+    // Update all bats with same device
+    fetch('/settings/iot/bat/set-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ barn_id: BARN_ID, device_id: deviceId })
+    }).then(r => r.json()).then(data => {
+        if (data.ok) location.reload();
+        else showToast('Lỗi: ' + (data.message || 'Unknown'));
+    });
 }
 
-function updateCurtainUI(id, pct) {
-    document.getElementById('cur_pos_label_' + id).textContent = pct + '%';
-    document.getElementById('cur_bar_' + id).style.width = pct + '%';
-    document.getElementById('cur_slider_' + id).value = pct;
-    document.getElementById('cur_slider_val_' + id).textContent = pct + '%';
+function updateBatChannel(code, direction, channel) {
+    const bat = BATS.find(b => b.code === code);
+    if (!bat) return;
+    const field = direction === 'up' ? 'up_channel' : 'down_channel';
+    fetch('/settings/iot/bat/update-channel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ bat_id: bat.id, [field]: channel })
+    }).then(r => r.json()).then(data => {
+        if (data.ok) showToast('Đã cập nhật kênh');
+        else showToast('Lỗi: ' + (data.message || 'Unknown'));
+    });
 }
 
-async function moveCurtain(id, targetPct) {
-    const card = document.getElementById('curtain_card_' + id);
+let moveTimers = {};
+
+function moveBat(code, direction) {
+    const bat = BATS.find(b => b.code === code);
+    if (!bat || !bat.id) { alert('Bạt chưa được cấu hình'); return; }
+
+    const card = document.getElementById('bat_card_' + code);
     card.classList.add('opacity-70');
-    try {
-        const res = await fetch('/iot/curtain/' + id + '/move', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: new URLSearchParams({ target_pct: targetPct })
-        });
-        const json = await res.json();
-        if (json.ok) {
-            updateCurtainUI(id, json.position);
-            if (json.duration > 0) {
-                showMovingState(id, json.direction, json.duration, json.position, json.target);
-                showToast(json.direction === 'up' ? '▼ Đang mở bạt...' : '▲ Đang đóng bạt...', json.duration);
-            }
+
+    fetch('/iot/bat/' + bat.id + '/' + direction, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            showToast(BAT_NAMES[code] + ': ' + (direction === 'up' ? '↑ Đang lên' : '↓ Đang xuống'));
+            startMoveTimer(code, direction, data.timeout || 60);
         } else {
-            alert(json.message || 'Lỗi gửi lệnh');
+            alert(data.message || 'Lỗi gửi lệnh');
         }
-    } catch(e) {
-        console.error('moveCurtain error:', e);
-        alert('Lỗi kết nối: ' + e.message);
-    }
-    card.classList.remove('opacity-70');
+    })
+    .catch(e => { alert('Lỗi: ' + e.message); })
+    .finally(() => card.classList.remove('opacity-70'));
 }
 
-async function stopCurtain(id) {
-    try {
-        const res = await fetch('/iot/curtain/' + id + '/stop', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'}
-        });
-        const json = await res.json();
-        if (json.ok) {
-            hideMovingState(id);
-            updateCurtainUI(id, json.position);
-            showToast('■ Đã dừng bạt · Vị trí: ' + json.position + '%');
+function stopBat(code) {
+    const bat = BATS.find(b => b.code === code);
+    if (!bat || !bat.id) return;
+
+    fetch('/iot/bat/' + bat.id + '/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            showToast(BAT_NAMES[code] + ': Đã dừng');
+            stopMoveTimer(code);
         } else {
-            alert(json.message || 'Lỗi gửi lệnh dừng');
+            alert(data.message || 'Lỗi');
         }
-    } catch(e) {
-        console.error('stopCurtain error:', e);
-        alert('Lỗi kết nối: ' + e.message);
+    });
+}
+
+function startMoveTimer(code, direction, timeout) {
+    stopMoveTimer(code);
+    let elapsed = 0;
+    moveTimers[code] = setInterval(() => {
+        elapsed++;
+        const el = document.getElementById('elapsed_' + code);
+        if (el) el.textContent = elapsed + 's';
+        if (elapsed >= timeout) stopMoveTimer(code);
+    }, 1000);
+}
+
+function stopMoveTimer(code) {
+    if (moveTimers[code]) {
+        clearInterval(moveTimers[code]);
+        delete moveTimers[code];
     }
-}
-
-let _movingTimers = {};
-
-function showMovingState(id, direction, duration, fromPos, toPos) {
-    const el = document.getElementById('cur_moving_' + id);
-    if (!el) return;
-    el.classList.remove('hidden');
-    el.innerHTML = direction === 'up'
-        ? '<span class="text-orange-500 animate-pulse">▲ Đang đóng... <span id="cur_countdown_' + id + '">' + duration.toFixed(1) + 's</span></span>'
-        : '<span class="text-green-500 animate-pulse">▼ Đang mở... <span id="cur_countdown_' + id + '">' + duration.toFixed(1) + 's</span></span>';
-
-    if (_movingTimers[id]) clearInterval(_movingTimers[id]);
-    let remaining = duration;
-    const total = duration;
-    _movingTimers[id] = setInterval(() => {
-        remaining -= 0.5;
-        const cd = document.getElementById('cur_countdown_' + id);
-        if (cd) cd.textContent = Math.max(0, remaining).toFixed(1) + 's';
-
-        const ratio = Math.min(1, (total - remaining) / total);
-        const currentPct = Math.round(fromPos + (toPos - fromPos) * ratio);
-        updateCurtainUI(id, currentPct);
-
-        if (remaining <= 0) {
-            updateCurtainUI(id, toPos);
-            hideMovingState(id);
-        }
-    }, 500);
-}
-
-function hideMovingState(id) {
-    const el = document.getElementById('cur_moving_' + id);
-    if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
-    if (_movingTimers[id]) { clearInterval(_movingTimers[id]); delete _movingTimers[id]; }
-}
-
-function moveAllCurtains(pct) {
-    CURTAIN_IDS.forEach(id => moveCurtain(id, pct));
-}
-
-function stopAllCurtains() {
-    CURTAIN_IDS.forEach(id => stopCurtain(id));
 }
 
 function showToast(msg) {
-    const existing = document.getElementById('iot_toast');
-    if (existing) existing.remove();
-    const toast = document.createElement('div');
-    toast.id = 'iot_toast';
-    toast.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg z-50';
-    toast.textContent = msg;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    const t = document.createElement('div');
+    t.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg z-50';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
 }
-
-document.querySelectorAll('input[type=range]').forEach(slider => {
-    slider.addEventListener('change', function() {
-        const id = this.id.replace('cur_slider_', '');
-        moveCurtain(parseInt(id), parseInt(this.value));
-    });
-});
 </script>
 
 <?php

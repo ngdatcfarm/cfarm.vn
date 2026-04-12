@@ -644,6 +644,8 @@ class SyncController
             'device_types', 'equipment_types', 'sensor_types',
             // Utilities
             'curtain_configs', 'notification_rules', 'firmwares',
+            // Bats (Local primary → Cloud)
+            'bats', 'bat_logs',
         ];
 
         if (!in_array($table, $allowed_tables)) {
