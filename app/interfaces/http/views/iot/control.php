@@ -65,9 +65,9 @@ ob_start();
                         · Vị trí: <span id="cur_pos_label_<?= e($cur->id) ?>" class="font-semibold"><?= e($cur->real_position) ?>%</span>
                         <span id="cur_moving_<?= e($cur->id) ?>" class="ml-1 <?= $cur->moving_state === 'idle' ? 'hidden' : '' ?>">
                             <?php if ($cur->moving_state === 'moving_up'): ?>
-                                <span class="text-green-500 animate-pulse">▲ Đang đóng...</span>
+                                <span class="text-orange-500 animate-pulse">▲ Đang đóng...</span>
                             <?php elseif ($cur->moving_state === 'moving_down'): ?>
-                                <span class="text-orange-500 animate-pulse">▼ Đang mở...</span>
+                                <span class="text-green-500 animate-pulse">▼ Đang mở...</span>
                             <?php endif; ?>
                         </span>
                     </div>
@@ -156,7 +156,7 @@ async function moveCurtain(id, targetPct) {
             updateCurtainUI(id, json.position);
             if (json.duration > 0) {
                 showMovingState(id, json.direction, json.duration, json.position, json.target);
-                showToast(json.direction === 'up' ? '▲ Đang đóng bạt...' : '▼ Đang mở bạt...', json.duration);
+                showToast(json.direction === 'up' ? '▼ Đang mở bạt...' : '▲ Đang đóng bạt...', json.duration);
             }
         } else {
             alert(json.message || 'Lỗi gửi lệnh');
@@ -195,8 +195,8 @@ function showMovingState(id, direction, duration, fromPos, toPos) {
     if (!el) return;
     el.classList.remove('hidden');
     el.innerHTML = direction === 'up'
-        ? '<span class="text-green-500 animate-pulse">▲ Đang đóng... <span id="cur_countdown_' + id + '">' + duration.toFixed(1) + 's</span></span>'
-        : '<span class="text-orange-500 animate-pulse">▼ Đang mở... <span id="cur_countdown_' + id + '">' + duration.toFixed(1) + 's</span></span>';
+        ? '<span class="text-orange-500 animate-pulse">▲ Đang đóng... <span id="cur_countdown_' + id + '">' + duration.toFixed(1) + 's</span></span>'
+        : '<span class="text-green-500 animate-pulse">▼ Đang mở... <span id="cur_countdown_' + id + '">' + duration.toFixed(1) + 's</span></span>';
 
     if (_movingTimers[id]) clearInterval(_movingTimers[id]);
     let remaining = duration;
