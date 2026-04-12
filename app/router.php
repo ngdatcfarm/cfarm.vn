@@ -67,6 +67,7 @@ use App\Interfaces\Http\Controllers\Web\IoT\DeviceController;
 use App\Interfaces\Http\Controllers\Web\IoT\CurtainController;
 use App\Interfaces\Http\Controllers\Web\IoT\CurtainSetupController;
 use App\Interfaces\Http\Controllers\Web\IoT\BatController;
+use App\Interfaces\Http\Controllers\Web\IoT\BatControlController;
 use App\Interfaces\Http\Controllers\Web\IoT\FirmwareController;
 use App\Interfaces\Http\Controllers\Web\IoT\Commands\DirectCommandController;
 
@@ -90,7 +91,7 @@ $r->addRoute('POST', '/settings/iot/type/{id:\d+}/delete', [DeviceController::cl
 
 // Curtain Control
 $r->addRoute('GET',  '/iot/control',                       [CurtainController::class, 'control_all']);
-$r->addRoute('GET',  '/iot/control/{barn_id}',            [CurtainController::class, 'control_page']);
+$r->addRoute('GET',  '/iot/control/{barn_id}',            [BatControlController::class, 'control_page']);
 $r->addRoute('POST', '/iot/curtain/{id:\d+}/move',         [CurtainController::class, 'curtain_move']);
 $r->addRoute('POST', '/iot/curtain/{id:\d+}/stop',         [CurtainController::class, 'curtain_stop']);
 $r->addRoute('GET',  '/iot/curtain/{id:\d+}/status',       [CurtainController::class, 'curtain_status']);
