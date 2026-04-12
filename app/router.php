@@ -341,5 +341,6 @@ $r->addRoute('POST', '/api/sync/receive',       [SyncController::class, 'receive
 $r->addRoute('GET',  '/api/sync/changes',        [SyncController::class, 'changes']);
 $r->addRoute('POST', '/api/sync/sensor-data',    [SyncController::class, 'sensor_data']);
 $r->addRoute('POST', '/api/sync/device-states',  [SyncController::class, 'device_states']);
+$r->addRoute('POST', '/api/sync/farm-data',     [SyncController::class, 'farm_data']);
 $r->addRoute('POST', '/api/sync/command',        [SyncController::class, 'send_command']);
 $r->addRoute('GET',  '/api/sync/status',          [SyncController::class, 'status']);

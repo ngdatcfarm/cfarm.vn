@@ -319,6 +319,132 @@ class SyncController
         $this->json(true, ['received' => $received, 'created' => $created]);
     }
 
+    // ── 4b. POST /api/sync/farm-data ─────────────────
+    // Nhận barns + devices từ local (upsert both, barns first due to FK)
+
+    public function farm_data(array $vars): void
+    {
+        if (!$this->verify_token()) {
+            $this->json(false, ['message' => 'Unauthorized'], 401);
+            return;
+        }
+
+        $body = $this->get_json_body();
+        $barns = $body['barns'] ?? [];
+        $devices = $body['devices'] ?? [];
+        $synced_barns = 0;
+        $synced_devices = 0;
+        $errors = [];
+
+        // Step 1: UPSERT barns first
+        foreach ($barns as $barn) {
+            try {
+                $stmt = $this->pdo->prepare("
+                    INSERT INTO barns (id, farm_id, number, name, barn_type, area_sqm,
+                        capacity, capacity_kg, length_m, width_m, height_m,
+                        construction_cost, construction_year, expected_lifespan_years,
+                        construction_type, land_cost, equipment_cost, other_cost,
+                        status, note, description, active, created_at, updated_at)
+                    VALUES (:id, :farm_id, :number, :name, :barn_type, :area_sqm,
+                        :capacity, :capacity_kg, :length_m, :width_m, :height_m,
+                        :construction_cost, :construction_year, :expected_lifespan_years,
+                        :construction_type, :land_cost, :equipment_cost, :other_cost,
+                        :status, :note, :description, :active, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE
+                        farm_id = VALUES(farm_id),
+                        number = VALUES(number),
+                        name = VALUES(name),
+                        barn_type = VALUES(barn_type),
+                        area_sqm = VALUES(area_sqm),
+                        capacity = VALUES(capacity),
+                        capacity_kg = VALUES(capacity_kg),
+                        length_m = VALUES(length_m),
+                        width_m = VALUES(width_m),
+                        height_m = VALUES(height_m),
+                        construction_cost = VALUES(construction_cost),
+                        construction_year = VALUES(construction_year),
+                        expected_lifespan_years = VALUES(expected_lifespan_years),
+                        construction_type = VALUES(construction_type),
+                        land_cost = VALUES(land_cost),
+                        equipment_cost = VALUES(equipment_cost),
+                        other_cost = VALUES(other_cost),
+                        status = VALUES(status),
+                        note = VALUES(note),
+                        description = VALUES(description),
+                        active = VALUES(active),
+                        updated_at = NOW()
+                ");
+                $stmt->execute([
+                    ':id' => $barn['id'] ?? null,
+                    ':farm_id' => $barn['farm_id'] ?? 'farm-01',
+                    ':number' => $barn['number'] ?? null,
+                    ':name' => $barn['name'] ?? '',
+                    ':barn_type' => $barn['barn_type'] ?? null,
+                    ':area_sqm' => $barn['area_sqm'] ?? null,
+                    ':capacity' => $barn['capacity'] ?? null,
+                    ':capacity_kg' => $barn['capacity_kg'] ?? null,
+                    ':length_m' => $barn['length_m'] ?? null,
+                    ':width_m' => $barn['width_m'] ?? null,
+                    ':height_m' => $barn['height_m'] ?? null,
+                    ':construction_cost' => $barn['construction_cost'] ?? null,
+                    ':construction_year' => $barn['construction_year'] ?? null,
+                    ':expected_lifespan_years' => $barn['expected_lifespan_years'] ?? 15,
+                    ':construction_type' => $barn['construction_type'] ?? null,
+                    ':land_cost' => $barn['land_cost'] ?? null,
+                    ':equipment_cost' => $barn['equipment_cost'] ?? null,
+                    ':other_cost' => $barn['other_cost'] ?? null,
+                    ':status' => $barn['status'] ?? 'active',
+                    ':note' => $barn['note'] ?? null,
+                    ':description' => $barn['description'] ?? null,
+                    ':active' => isset($barn['active']) ? ($barn['active'] ? 1 : 0) : 1,
+                ]);
+                $synced_barns++;
+            } catch (\Throwable $e) {
+                $errors[] = "barn/{$barn['id']}: " . $e->getMessage();
+            }
+        }
+
+        // Step 2: UPSERT devices (after barns due to FK)
+        foreach ($devices as $device) {
+            try {
+                $stmt = $this->pdo->prepare("
+                    INSERT INTO devices (device_code, name, device_type_id, barn_id, mqtt_topic, location, status, created_at, updated_at)
+                    VALUES (:device_code, :name, :device_type_id, :barn_id, :mqtt_topic, :location, :status, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        device_type_id = VALUES(device_type_id),
+                        barn_id = VALUES(barn_id),
+                        mqtt_topic = VALUES(mqtt_topic),
+                        location = VALUES(location),
+                        status = VALUES(status),
+                        updated_at = NOW()
+                ");
+                $stmt->execute([
+                    ':device_code' => $device['device_code'] ?? null,
+                    ':name' => $device['name'] ?? $device['device_code'] ?? '',
+                    ':device_type_id' => $device['device_type_id'] ?? null,
+                    ':barn_id' => $device['barn_id'] ?? null,
+                    ':mqtt_topic' => $device['mqtt_topic'] ?? ('cfarm/' . ($device['device_code'] ?? '')),
+                    ':location' => $device['location'] ?? null,
+                    ':status' => $device['status'] ?? 'offline',
+                ]);
+                $synced_devices++;
+            } catch (\Throwable $e) {
+                $errors[] = "device/{$device['device_code']}: " . $e->getMessage();
+            }
+        }
+
+        $status = empty($errors) ? 'ok' : 'partial';
+        $this->log_sync('farm_data', $synced_barns + $synced_devices, $status,
+            empty($errors) ? null : json_encode($errors));
+
+        $this->json(true, [
+            'synced_barns' => $synced_barns,
+            'synced_devices' => $synced_devices,
+            'errors' => $errors,
+        ]);
+    }
+
     private function sync_device_channels(string $device_code, array $channels): void
     {
         try {
