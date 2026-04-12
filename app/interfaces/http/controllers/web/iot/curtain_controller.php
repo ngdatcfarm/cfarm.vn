@@ -6,7 +6,13 @@ use App\Domains\IoT\Services\MqttService;
 use PDO;
 
 /**
- * IoT Curtain Controller - Điều khiển bạt
+ * IoT Curtain Controller - Cloud version
+ *
+ * Cloud DB schema differs from local:
+ * - up_channel/down_channel are INT (direct channel numbers), not FK
+ * - No device_channels JOIN needed
+ * - No moving_state tracking in DB (ESP32 handles it)
+ * - current_position is INT (0-100)
  */
 class CurtainController
 {
@@ -26,80 +32,6 @@ class CurtainController
     }
 
     /**
-     * Tính vị trí thực tế của bạt
-     */
-    private function calculateRealPosition(object $c): int
-    {
-        if ($c->moving_state === 'idle' || !$c->moving_started_at) {
-            return (int)$c->current_position_pct;
-        }
-
-        $elapsed = time() - strtotime($c->moving_started_at);
-        $duration = (float)$c->moving_duration_seconds;
-
-        if ($duration <= 0) return (int)$c->current_position_pct;
-
-        $ratio = min(1.0, $elapsed / $duration);
-        $from = (int)$c->current_position_pct;
-        $to = (int)$c->moving_target_pct;
-        $diff = $to - $from;
-
-        return max(0, min(100, $from + (int)round($diff * $ratio)));
-    }
-
-    /**
-     * Lấy curtain config đầy đủ
-     */
-    private function getCurtainFull(int $id): ?array
-    {
-        $stmt = $this->pdo->prepare("
-            SELECT cc.*,
-                   d.mqtt_topic,
-                   uc.channel_number as up_channel,
-                   dc.channel_number as down_channel,
-                   uc.id as up_channel_id_fk,
-                   dc.id as down_channel_id_fk,
-                   uc.gpio_pin as up_gpio,
-                   dc.gpio_pin as down_gpio,
-                   d.is_online
-            FROM curtain_configs cc
-            JOIN devices d ON d.id = cc.device_id
-            LEFT JOIN device_channels uc ON uc.id = cc.up_channel_id
-            LEFT JOIN device_channels dc ON dc.id = cc.down_channel_id
-            WHERE cc.id = :id
-        ");
-        $stmt->execute([':id' => $id]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-    }
-
-    /**
-     * Dừng bạt đang chạy
-     */
-    private function stopCurtain(array $c): int
-    {
-        $realPos = $this->calculateRealPosition((object)$c);
-
-        // Gửi lệnh dừng
-        if ($c['moving_state'] !== 'idle') {
-            $channel = $c['moving_state'] === 'moving_up' ? $c['up_channel'] : $c['down_channel'];
-            $this->mqtt->sendRelayOff($c['mqtt_topic'], (int)$channel);
-        }
-
-        // Cập nhật DB
-        $this->pdo->prepare("
-            UPDATE curtain_configs
-            SET current_position_pct = :pos,
-                moving_state = 'idle',
-                moving_target_pct = NULL,
-                moving_started_at = NULL,
-                moving_duration_seconds = NULL
-            WHERE id = :id
-        ")->execute([':pos' => $realPos, ':id' => $c['id']]);
-
-        return $realPos;
-    }
-
-    /**
      * GET /iot/control - Điều khiển tất cả các chuồng
      */
     public function control_all(array $vars): void
@@ -109,25 +41,21 @@ class CurtainController
         $all_curtains = [];
         foreach ($barns as $barn) {
             $stmt = $this->pdo->prepare("
-                SELECT cc.*,
-                       d.mqtt_topic, d.is_online,
-                       uc.channel_number as up_channel,
-                       dc.channel_number as down_channel
+                SELECT cc.*, d.mqtt_topic, d.is_online, d.device_code
                 FROM curtain_configs cc
                 JOIN devices d ON d.id = cc.device_id
-                LEFT JOIN device_channels uc ON uc.id = cc.up_channel_id
-                LEFT JOIN device_channels dc ON dc.id = cc.down_channel_id
                 WHERE cc.barn_id = :barn_id
                 ORDER BY cc.id
             ");
             $stmt->execute([':barn_id' => $barn->id]);
             $curtains = $stmt->fetchAll(PDO::FETCH_OBJ);
-            
+
             foreach ($curtains as $cur) {
-                $cur->real_position = $this->calculateRealPosition($cur);
+                $cur->real_position = (int)($cur->current_position ?? 0);
                 $cur->barn_name = $barn->name;
+                $cur->moving_state = 'idle'; // Cloud DB doesn't track this
             }
-            
+
             $all_curtains[$barn->id] = $curtains;
         }
 
@@ -140,11 +68,11 @@ class CurtainController
     public function control_page(array $vars): void
     {
         $barn_id = (int)$vars['barn_id'];
-        
+
         $barn = $this->pdo->prepare("SELECT * FROM barns WHERE id = ?");
         $barn->execute([$barn_id]);
         $barn = $barn->fetch(PDO::FETCH_OBJ);
-        
+
         if (!$barn) {
             http_response_code(404);
             echo 'Barn not found';
@@ -152,14 +80,9 @@ class CurtainController
         }
 
         $stmt = $this->pdo->prepare("
-            SELECT cc.*,
-                   d.mqtt_topic, d.is_online,
-                   uc.channel_number as up_channel,
-                   dc.channel_number as down_channel
+            SELECT cc.*, d.mqtt_topic, d.is_online, d.device_code
             FROM curtain_configs cc
             JOIN devices d ON d.id = cc.device_id
-            LEFT JOIN device_channels uc ON uc.id = cc.up_channel_id
-            LEFT JOIN device_channels dc ON dc.id = cc.down_channel_id
             WHERE cc.barn_id = :barn_id
             ORDER BY cc.id
         ");
@@ -167,7 +90,8 @@ class CurtainController
         $curtains = $stmt->fetchAll(PDO::FETCH_OBJ);
 
         foreach ($curtains as $cur) {
-            $cur->real_position = $this->calculateRealPosition($cur);
+            $cur->real_position = (int)($cur->current_position ?? 0);
+            $cur->moving_state = 'idle';
         }
 
         require view_path('iot/control.php');
@@ -187,8 +111,7 @@ class CurtainController
         }
 
         try {
-            // Dừng bạt nếu đang chạy
-            $currentPos = $this->stopCurtain($c);
+            $currentPos = (int)($c['current_position'] ?? 0);
 
             // Nếu đã ở vị trí
             $diff = $target_pct - $currentPos;
@@ -199,54 +122,30 @@ class CurtainController
             // Tính hướng và thời gian
             if ($diff > 0) {
                 // Mở (position tăng)
-                $duration = abs($diff) / 100 * (float)$c['full_down_seconds'];
+                $duration = abs($diff) / 100 * (float)($c['full_down_seconds'] ?? 60);
                 $channel = (int)$c['down_channel'];
-                $channelId = $c['down_channel_id_fk'];
                 $dir = 'down';
-                $mstate = 'moving_down';
             } else {
                 // Đóng (position giảm)
-                $duration = abs($diff) / 100 * (float)$c['full_up_seconds'];
+                $duration = abs($diff) / 100 * (float)($c['full_up_seconds'] ?? 60);
                 $channel = (int)$c['up_channel'];
-                $channelId = $c['up_channel_id_fk'];
                 $dir = 'up';
-                $mstate = 'moving_up';
             }
 
-            // Gửi MQTT
-            $sent = $this->mqtt->sendRelayOnWithDuration($c['mqtt_topic'], $channel, max(1, (int)$duration));
+            // Gửi MQTT via cloud
+            $deviceCode = $c['device_code'];
+            $sent = $this->mqtt->sendCurtainPositionCloud($deviceCode, $target_pct);
 
             if (!$sent) {
                 $this->json(['ok' => false, 'message' => 'Không gửi được lệnh MQTT']);
             }
 
-            // Lưu trạng thái
+            // Cập nhật vị trí hiện tại (optimistic)
             $this->pdo->prepare("
                 UPDATE curtain_configs
-                SET moving_state = :mstate,
-                    moving_target_pct = :target,
-                    moving_started_at = NOW(),
-                    moving_duration_seconds = :dur
+                SET current_position = :pos
                 WHERE id = :id
-            ")->execute([
-                ':mstate' => $mstate,
-                ':target' => $target_pct,
-                ':dur'    => round($duration, 1),
-                ':id'     => $id,
-            ]);
-
-            // Log command
-            $cycle_id = $this->getActiveCycleId((int)$c['barn_id']);
-            $this->pdo->prepare("
-                INSERT INTO device_commands (device_id, channel_id, command_type, payload, source, status, sent_at, barn_id, cycle_id)
-                VALUES (:did, :chid, 'set_position', :payload, 'manual', 'sent', NOW(), :barn_id, :cycle_id)
-            ")->execute([
-                ':did'     => $c['device_id'],
-                ':chid'    => $channelId,
-                ':payload' => json_encode(['from' => $currentPos, 'to' => $target_pct, 'duration' => round($duration, 1)]),
-                ':barn_id' => $c['barn_id'],
-                ':cycle_id' => $cycle_id,
-            ]);
+            ")->execute([':pos' => $target_pct, ':id' => $id]);
 
             $this->json([
                 'ok'        => true,
@@ -274,8 +173,12 @@ class CurtainController
         }
 
         try {
-            $realPos = $this->stopCurtain($c);
-            $this->json(['ok' => true, 'message' => 'Stopped', 'position' => $realPos]);
+            // Gửi lệnh dừng relay cho cả up và down channel
+            $deviceCode = $c['device_code'];
+            $this->mqtt->sendRelayOffCloud($deviceCode, (int)$c['up_channel']);
+            $this->mqtt->sendRelayOffCloud($deviceCode, (int)$c['down_channel']);
+
+            $this->json(['ok' => true, 'message' => 'Stopped']);
         } catch (\Throwable $e) {
             error_log("[CurtainController] curtain_stop error: " . $e->getMessage());
             $this->json(['ok' => false, 'message' => 'Lỗi hệ thống: ' . $e->getMessage()], 500);
@@ -288,27 +191,31 @@ class CurtainController
     public function curtain_status(array $vars): void
     {
         $id = (int)$vars['id'];
-        
+
         $c = $this->getCurtainFull($id);
         if (!$c) {
             $this->json(['ok' => false, 'message' => 'Not found'], 404);
         }
 
-        $realPos = $this->calculateRealPosition((object)$c);
-
         $this->json([
             'ok' => true,
-            'position' => $realPos,
-            'moving_state' => $c['moving_state'],
-            'target_pct' => $c['moving_target_pct'],
+            'position' => (int)($c['current_position'] ?? 0),
+            'moving_state' => 'idle',
         ]);
     }
 
-    private function getActiveCycleId(int $barn_id): ?int
+    /**
+     * Lấy curtain config đầy đủ
+     */
+    private function getCurtainFull(int $id): ?array
     {
-        $stmt = $this->pdo->prepare("SELECT id FROM cycles WHERE barn_id = ? AND status = 'active' LIMIT 1");
-        $stmt->execute([$barn_id]);
-        $row = $stmt->fetch();
-        return $row ? (int)$row['id'] : null;
+        $stmt = $this->pdo->prepare("
+            SELECT cc.*, d.mqtt_topic, d.is_online, d.device_code
+            FROM curtain_configs cc
+            JOIN devices d ON d.id = cc.device_id
+            WHERE cc.id = :id
+        ");
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 }
