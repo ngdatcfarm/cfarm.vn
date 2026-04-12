@@ -17,6 +17,10 @@ use App\Domains\Cycle\Entities\Cycle;
 // --- load helpers ---
 require_once ROOT_PATH . '/app/shared/utils/helpers.php';
 
+// --- load new controllers (classmap not rebuilt after git pull) ---
+require_once ROOT_PATH . '/app/interfaces/http/controllers/web/IoT/bat_controller.php';
+require_once ROOT_PATH . '/app/interfaces/http/controllers/web/IoT/bat_control_controller.php';
+
 // --- load database ---
 $pdo = require_once ROOT_PATH . '/app/shared/database/mysql.php';
 
