@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=UTF-8');
 $title = 'Điều khiển bạt - ' . e($barn->name);
 ob_start();
 ?>

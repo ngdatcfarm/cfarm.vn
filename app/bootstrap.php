@@ -9,6 +9,7 @@
 declare(strict_types=1);
 
 date_default_timezone_set('Asia/Ho_Chi_Minh');
+header('Content-Type: text/html; charset=UTF-8');
 
 use FastRoute\Dispatcher;
 use FastRoute\RouteCollector;
