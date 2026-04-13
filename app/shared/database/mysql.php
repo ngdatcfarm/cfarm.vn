@@ -26,6 +26,8 @@ $options = [
 
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
+    // Force UTF-8 connection charset to prevent double-encoding
+    $pdo->exec("SET NAMES utf8mb4");
 } catch (PDOException $e) {
     // Fail fast – let bootstrap handle fatal error
     throw new RuntimeException(
