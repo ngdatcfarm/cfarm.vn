@@ -38,25 +38,24 @@ class CurtainController
     {
         $barns = $this->pdo->query("SELECT * FROM barns ORDER BY number")->fetchAll(PDO::FETCH_OBJ);
 
-        $all_curtains = [];
+        $all_bats = [];
         foreach ($barns as $barn) {
             $stmt = $this->pdo->prepare("
-                SELECT cc.*, d.mqtt_topic, d.is_online, d.device_code
-                FROM curtain_configs cc
-                JOIN devices d ON d.id = cc.device_id
-                WHERE cc.barn_id = :barn_id
-                ORDER BY cc.id
+                SELECT b.*, d.is_online, d.device_code
+                FROM bats b
+                LEFT JOIN devices d ON d.id = b.device_id
+                WHERE b.barn_id = :barn_id
+                ORDER BY b.id
             ");
             $stmt->execute([':barn_id' => $barn->id]);
-            $curtains = $stmt->fetchAll(PDO::FETCH_OBJ);
+            $bats = $stmt->fetchAll(PDO::FETCH_OBJ);
 
-            foreach ($curtains as $cur) {
-                $cur->real_position = (int)($cur->current_position ?? 0);
-                $cur->barn_name = $barn->name;
-                $cur->moving_state = 'idle'; // Cloud DB doesn't track this
+            foreach ($bats as $bat) {
+                $bat->real_position = ($bat->position ?? 'stopped') === 'stopped' ? 0 : 50;
+                $bat->moving_state = $bat->position ?? 'stopped';
             }
 
-            $all_curtains[$barn->id] = $curtains;
+            $all_bats[$barn->id] = $bats;
         }
 
         require view_path('iot/control_all.php');

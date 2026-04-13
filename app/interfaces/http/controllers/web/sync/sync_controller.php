@@ -155,6 +155,9 @@ class SyncController
             'vaccine_schedules'     => 'updated_at',
             'feed_trough_checks'     => 'updated_at',
             'weight_reminders'       => 'updated_at',
+            // Bats (Cloud <- Local primary sync)
+            'bats'                   => 'updated_at',
+            'bat_logs'              => 'created_at',
             // Legacy
             'notification_rules'     => 'updated_at',
             'firmwares'              => 'created_at',
@@ -646,6 +649,16 @@ class SyncController
             'curtain_configs', 'notification_rules', 'firmwares',
             // Bats (Local primary → Cloud)
             'bats', 'bat_logs',
+            // Weight tracking (Local PRIMARY → Cloud)
+            'weight_sessions', 'weight_details',
+            // Alerts (Local PRIMARY → Cloud)
+            'alerts',
+            // Water logs (Local PRIMARY → Cloud)
+            'care_water_logs',
+            // Barn-warehouse links (Local PRIMARY → Cloud)
+            'barn_default_warehouses',
+            // Inventory alert rules (Local PRIMARY → Cloud)
+            'inventory_alert_rules',
         ];
 
         if (!in_array($table, $allowed_tables)) {
