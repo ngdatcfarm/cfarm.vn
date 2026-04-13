@@ -36,7 +36,7 @@ class BatControlController
         $bats_rows = $stmt->fetchAll(PDO::FETCH_OBJ);
 
         // Load devices (ESP32 relay controllers) - all relay types including relay_4ch, relay_8ch, mixed
-        $stmt = $this->pdo->query("
+        $stmt = $this->pdo->prepare("
             SELECT d.* FROM devices d
             LEFT JOIN device_types dt ON dt.id = d.device_type_id
             WHERE d.barn_id = :barn_id
