@@ -35,13 +35,17 @@ class BatControlController
         $stmt->execute([$barn_id]);
         $bats_rows = $stmt->fetchAll(PDO::FETCH_OBJ);
 
-        // Load devices (ESP32 relay controllers)
+        // Load devices (ESP32 relay controllers) - all relay types including relay_4ch, relay_8ch, mixed
         $stmt = $this->pdo->query("
             SELECT d.* FROM devices d
-            JOIN device_types dt ON dt.id = d.device_type_id
-            WHERE dt.device_class = 'esp32_relay'
+            LEFT JOIN device_types dt ON dt.id = d.device_type_id
+            WHERE d.barn_id = :barn_id
+            AND (dt.code IN ('relay_4ch', 'relay_8ch', 'mixed')
+                 OR dt.device_class IN ('relay', 'esp32', 'esp32_relay')
+                 OR d.device_type_id IS NULL)
             ORDER BY d.name
         ");
+        $stmt->execute([':barn_id' => $barn_id]);
         $devices = $stmt->fetchAll(PDO::FETCH_OBJ);
 
         // Determine selected ESP32 device (first bat with device_id, or user selection)
