@@ -63,6 +63,10 @@ class BatController
         $stmt->execute();
         $localPort = $stmt->fetchColumn() ?: '8443';
 
+        $stmt = $this->pdo->prepare("SELECT value FROM sync_config WHERE `key` = 'api_token'");
+        $stmt->execute();
+        $apiToken = $stmt->fetchColumn() ?: '';
+
         $localUrl = "http://{$localIp}:{$localPort}";
 
         $payload = [
@@ -77,7 +81,10 @@ class BatController
             curl_setopt_array($ch, [
                 CURLOPT_POST => true,
                 CURLOPT_POSTFIELDS => json_encode($payload),
-                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $apiToken,
+                ],
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT => 10,
             ]);
