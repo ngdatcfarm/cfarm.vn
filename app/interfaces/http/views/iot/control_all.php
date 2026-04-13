@@ -28,17 +28,17 @@ ob_start();
 <!-- Danh sách chuồng -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 <?php foreach ($barns as $barn): ?>
-    <?php 
-    $curtains = $all_curtains[$barn->id] ?? [];
-    $has_curtains = !empty($curtains);
+    <?php
+    $bats = $all_bats[$barn->id] ?? [];
+    $has_bats = !empty($bats);
     ?>
-    <a href="/iot/control/<?= $barn->id ?>"
+    <a href="/iot/control/<?= e($barn->id) ?>"
        class="block bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 hover:border-blue-400 transition-colors">
         <div class="flex items-center justify-between mb-2">
-            <div class="font-semibold"><?= htmlspecialchars($barn->name) ?></div>
-            <?php if ($has_curtains): ?>
+            <div class="font-semibold"><?= e($barn->name) ?></div>
+            <?php if ($has_bats): ?>
             <span class="text-xs bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-2 py-1 rounded-full">
-                <?= count($curtains) ?> bạt
+                <?= count($bats) ?> bạt
             </span>
             <?php else: ?>
             <span class="text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 px-2 py-1 rounded-full">
@@ -46,19 +46,19 @@ ob_start();
             </span>
             <?php endif; ?>
         </div>
-        
-        <?php if ($has_curtains): ?>
+
+        <?php if ($has_bats): ?>
         <div class="space-y-2 mt-3">
-            <?php foreach ($curtains as $cur): ?>
+            <?php foreach ($bats as $bat): ?>
             <div class="flex items-center justify-between text-sm">
-                <span class="text-gray-600 dark:text-gray-300"><?= htmlspecialchars($cur->name) ?></span>
+                <span class="text-gray-600 dark:text-gray-300"><?= e($bat->name) ?></span>
                 <div class="flex items-center gap-2">
-                    <?php if ($cur->is_online): ?>
+                    <?php if ($bat->is_online): ?>
                     <span class="w-2 h-2 bg-green-500 rounded-full"></span>
                     <?php else: ?>
                     <span class="w-2 h-2 bg-gray-300 rounded-full"></span>
                     <?php endif; ?>
-                    <span class="font-semibold"><?= $cur->real_position ?>%</span>
+                    <span class="font-semibold"><?= e($bat->position) ?></span>
                 </div>
             </div>
             <?php endforeach; ?>
