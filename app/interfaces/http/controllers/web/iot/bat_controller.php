@@ -2,23 +2,14 @@
 declare(strict_types=1);
 namespace App\Interfaces\Http\Controllers\Web\IoT;
 
-use App\Domains\IoT\Services\MqttService;
 use PDO;
 
 /**
  * Cloud Bat Controller - reads synced bats data, sends commands to local via sync
- *
- * Cloud DB has `bats` table synced from local (master). Commands go back via
- * POST /api/sync/command to local's execute_remote_command().
  */
 class BatController
 {
-    private MqttService $mqtt;
-
-    public function __construct(private PDO $pdo)
-    {
-        $this->mqtt = new MqttService();
-    }
+    public function __construct(private PDO $pdo) {}
 
     private function json(array $data, int $code = 200): void
     {
@@ -28,9 +19,6 @@ class BatController
         exit;
     }
 
-    /**
-     * GET /iot/bat/{id} - Get bat status
-     */
     public function status(array $vars): void
     {
         $id = (int)$vars['id'];
@@ -56,48 +44,26 @@ class BatController
         ]);
     }
 
-    /**
-     * POST /iot/bat/{id}/up - Move bat up
-     */
-    public function move_up(array $vars): void
-    {
-        $this->sendCommand((int)$vars['id'], 'up');
-    }
+    public function move_up(array $vars): void { $this->sendCommand((int)$vars['id'], 'up'); }
+    public function move_down(array $vars): void { $this->sendCommand((int)$vars['id'], 'down'); }
+    public function stop(array $vars): void { $this->sendCommand((int)$vars['id'], 'stop'); }
 
-    /**
-     * POST /iot/bat/{id}/down - Move bat down
-     */
-    public function move_down(array $vars): void
-    {
-        $this->sendCommand((int)$vars['id'], 'down');
-    }
-
-    /**
-     * POST /iot/bat/{id}/stop - Stop bat
-     */
-    public function stop(array $vars): void
-    {
-        $this->sendCommand((int)$vars['id'], 'stop');
-    }
-
-    /**
-     * Send command to local via sync endpoint
-     */
     private function sendCommand(int $batId, string $action): void
     {
         $bat = $this->getBat($batId);
-        if (!$bat) {
-            $this->json(['ok' => false, 'message' => 'Not found'], 404);
-        }
+        if (!$bat) { $this->json(['ok' => false, 'message' => 'Not found'], 404); }
+        if (!$bat['device_id']) { $this->json(['ok' => false, 'message' => 'Bat chưa gắn thiết bị'], 400); }
 
-        if (!$bat['device_id']) {
-            $this->json(['ok' => false, 'message' => 'Bat chưa gắn thiết bị'], 400);
-        }
-
-        // Get local sync URL from settings
-        $stmt = $this->pdo->prepare("SELECT value FROM settings WHERE name = 'local_sync_url' LIMIT 1");
+        // Get local URL from sync_config
+        $stmt = $this->pdo->prepare("SELECT value FROM sync_config WHERE `key` = 'local_ip'");
         $stmt->execute();
-        $localUrl = $stmt->fetchColumn() ?: 'http://localhost:8080';
+        $localIp = $stmt->fetchColumn() ?: '192.168.1.9';
+
+        $stmt = $this->pdo->prepare("SELECT value FROM sync_config WHERE `key` = 'local_port'");
+        $stmt->execute();
+        $localPort = $stmt->fetchColumn() ?: '8443';
+
+        $localUrl = "http://{$localIp}:{$localPort}";
 
         $payload = [
             'type' => 'bat',
@@ -120,7 +86,7 @@ class BatController
             curl_close($ch);
 
             if ($httpCode !== 200) {
-                $this->json(['ok' => false, 'message' => 'Local server unreachable'], 502);
+                $this->json(['ok' => false, 'message' => 'Local unreachable (HTTP ' . $httpCode . ')'], 502);
             }
 
             $data = json_decode($resp, true);
@@ -128,15 +94,9 @@ class BatController
                 $this->json(['ok' => false, 'message' => $data['message'] ?? 'Command failed'], 400);
             }
 
-            $this->json([
-                'ok' => true,
-                'message' => 'Đã gửi lệnh ' . $action,
-                'bat_id' => $batId,
-                'action' => $action,
-                'timeout' => (int)$bat['timeout_seconds'],
-            ]);
+            $this->json(['ok' => true, 'message' => 'Đã gửi lệnh ' . $action, 'bat_id' => $batId, 'action' => $action, 'timeout' => (int)$bat['timeout_seconds']]);
         } catch (\Throwable $e) {
-            error_log("[BatController] sendCommand error: " . $e->getMessage());
+            error_log("[BatController] error: " . $e->getMessage());
             $this->json(['ok' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
         }
     }
