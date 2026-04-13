@@ -72,7 +72,7 @@ ob_start();
                     </div>
                 </div>
                 <div class="text-right">
-                    <div class="text-sm font-bold <?= $bat['moving_state'] === 'up' ? 'text-green-600' : ($bat['moving_state'] === 'down' ? 'text-red-600' : 'text-gray-400') ?>">
+                    <div id="state_<?= e($bat['code']) ?>" class="text-sm font-bold <?= $bat['moving_state'] === 'up' ? 'text-green-600' : ($bat['moving_state'] === 'down' ? 'text-red-600' : 'text-gray-400') ?>">
                         <?= $bat['moving_state'] === 'up' ? '↑ LÊN' : ($bat['moving_state'] === 'down' ? '↓ XUỐNG' : '■ DỪNG') ?>
                     </div>
                     <?php if ($bat['moving_state'] !== 'stopped'): ?>
@@ -85,32 +85,35 @@ ob_start();
             <div class="mb-3">
                 <div class="flex justify-between text-xs text-gray-400 mb-1">
                     <span>0%</span>
-                    <span>Vị trí: <?= e($bat['position']) ?>%</span>
+                    <span id="pos_<?= e($bat['code']) ?>">Vị trí: <?= e($bat['position']) ?>%</span>
                     <span>100%</span>
                 </div>
                 <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
-                    <div class="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                    <div id="bar_<?= e($bat['code']) ?>" class="h-full bg-indigo-500 rounded-full transition-all duration-500"
                          style="width: <?= e($bat['position']) ?>%"></div>
                 </div>
             </div>
 
             <!-- Control Buttons -->
             <div class="flex gap-2">
-                <button onclick="moveBat('<?= e($bat['code']) ?>', 'up')"
+                <button id="btn_up_<?= e($bat['code']) ?>"
+                        onclick="moveBat('<?= e($bat['code']) ?>', 'up')"
                         <?= $bat['moving_state'] !== 'stopped' || !$bat['device_id'] ? 'disabled' : '' ?>
                         class="flex-1 py-3 px-3 rounded-xl font-bold text-white transition-all
                                <?= $bat['moving_state'] === 'up' ? 'bg-green-600' : 'bg-green-500 hover:bg-green-600' ?>
                                disabled:opacity-50 disabled:cursor-not-allowed">
                     ↑
                 </button>
-                <button onclick="moveBat('<?= e($bat['code']) ?>', 'down')"
+                <button id="btn_down_<?= e($bat['code']) ?>"
+                        onclick="moveBat('<?= e($bat['code']) ?>', 'down')"
                         <?= $bat['moving_state'] !== 'stopped' || !$bat['device_id'] ? 'disabled' : '' ?>
                         class="flex-1 py-3 px-3 rounded-xl font-bold text-white transition-all
                                <?= $bat['moving_state'] === 'down' ? 'bg-red-600' : 'bg-red-500 hover:bg-red-600' ?>
                                disabled:opacity-50 disabled:cursor-not-allowed">
                     ↓
                 </button>
-                <button onclick="stopBat('<?= e($bat['code']) ?>')"
+                <button id="btn_stop_<?= e($bat['code']) ?>"
+                        onclick="stopBat('<?= e($bat['code']) ?>')"
                         <?= $bat['moving_state'] === 'stopped' ? 'disabled' : '' ?>
                         class="px-4 py-3 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all
                                disabled:opacity-50 disabled:cursor-not-allowed">
@@ -232,6 +235,7 @@ function updateBatChannel(code, direction, channel) {
 }
 
 let moveTimers = {};
+let movingStates = {}; // Track moving state per bat
 
 function moveBat(code, direction) {
     const bat = BATS.find(b => b.code === code);
@@ -247,6 +251,8 @@ function moveBat(code, direction) {
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
+            // Update UI for moving state
+            setBatMoving(code, direction);
             showToast(BAT_NAMES[code] + ': ' + (direction === 'up' ? '↑ Đang lên' : '↓ Đang xuống'));
             startMoveTimer(code, direction, data.timeout || 60);
         } else {
@@ -268,12 +274,84 @@ function stopBat(code) {
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
+            // Update UI for stopped state
+            setBatStopped(code);
             showToast(BAT_NAMES[code] + ': Đã dừng');
             stopMoveTimer(code);
         } else {
             alert(data.message || 'Lỗi');
         }
     });
+}
+
+// Update button and indicator states for moving
+function setBatMoving(code, direction) {
+    movingStates[code] = direction;
+    updateBatUI(code);
+}
+
+// Update button and indicator states for stopped
+function setBatStopped(code) {
+    delete movingStates[code];
+    updateBatUI(code);
+}
+
+// Update all UI elements for a bat
+function updateBatUI(code) {
+    const direction = movingStates[code];
+    const upBtn = document.getElementById('btn_up_' + code);
+    const downBtn = document.getElementById('btn_down_' + code);
+    const stopBtn = document.getElementById('btn_stop_' + code);
+    const posLabel = document.getElementById('pos_' + code);
+    const posBar = document.getElementById('bar_' + code);
+    const stateLabel = document.getElementById('state_' + code);
+
+    if (direction) {
+        // Moving state
+        if (upBtn) upBtn.disabled = direction === 'up';
+        if (downBtn) downBtn.disabled = direction === 'down';
+        if (stopBtn) stopBtn.disabled = false;
+        if (posLabel) posLabel.textContent = 'Đang ' + (direction === 'up' ? 'lên' : 'xuống') + '...';
+        if (stateLabel) {
+            stateLabel.textContent = direction === 'up' ? '↑ LÊN' : '↓ XUỐNG';
+            stateLabel.className = 'text-sm font-bold ' + (direction === 'up' ? 'text-green-600' : 'text-red-600');
+        }
+        // Show elapsed time element if not exists
+        let elapsedEl = document.getElementById('elapsed_' + code);
+        if (!elapsedEl && stateLabel) {
+            elapsedEl = document.createElement('div');
+            elapsedEl.id = 'elapsed_' + code;
+            elapsedEl.className = 'text-xs text-gray-400 mt-0.5';
+            elapsedEl.textContent = '0s';
+            stateLabel.parentNode.appendChild(elapsedEl);
+        }
+        // Animate bar
+        if (posBar) {
+            posBar.style.transition = 'width 1s linear';
+            if (direction === 'up') {
+                posBar.style.width = '100%';
+            } else {
+                posBar.style.width = '0%';
+            }
+        }
+    } else {
+        // Stopped state
+        if (upBtn) upBtn.disabled = false;
+        if (downBtn) downBtn.disabled = false;
+        if (stopBtn) stopBtn.disabled = true;
+        if (posLabel) posLabel.textContent = 'DỪNG';
+        if (stateLabel) {
+            stateLabel.textContent = '■ DỪNG';
+            stateLabel.className = 'text-sm font-bold text-gray-400';
+        }
+        // Remove elapsed element
+        const elapsedEl = document.getElementById('elapsed_' + code);
+        if (elapsedEl) elapsedEl.remove();
+        if (posBar) {
+            posBar.style.transition = 'width 0.3s';
+            posBar.style.width = '50%';
+        }
+    }
 }
 
 function startMoveTimer(code, direction, timeout) {
