@@ -1,0 +1,18 @@
+[Unit]
+Description=CFarm Cloud MQTT Publisher Service
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/app.cfarm.vn/scripts/mqtt_publisher
+PythonPath=/var/www/app.cfarm.vn/scripts/mqtt_publisher
+ExecStart=/usr/bin/python3 /var/www/app.cfarm.vn/scripts/mqtt_publisher/cloud_mqtt_publisher.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/cfarm/mqtt_publisher.log
+StandardError=append:/var/log/cfarm/mqtt_publisher.log
+
+[Install]
+WantedBy=multi-user.target

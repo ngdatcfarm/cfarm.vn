@@ -54,58 +54,49 @@ class BatController
         if (!$bat) { $this->json(['ok' => false, 'message' => 'Not found'], 404); }
         if (!$bat['device_id']) { $this->json(['ok' => false, 'message' => 'Bat chưa gắn thiết bị'], 400); }
 
-        // Get local URL from sync_config
-        $stmt = $this->pdo->prepare("SELECT value FROM sync_config WHERE `key` = 'local_ip'");
-        $stmt->execute();
-        $localIp = $stmt->fetchColumn() ?: '192.168.1.9';
+        // Get device_code from devices table
+        $stmt = $this->pdo->prepare("SELECT device_code FROM devices WHERE id = ?");
+        $stmt->execute([$bat['device_id']]);
+        $deviceCode = $stmt->fetchColumn();
+        if (!$deviceCode) { $this->json(['ok' => false, 'message' => 'Device not found'], 404); }
 
-        $stmt = $this->pdo->prepare("SELECT value FROM sync_config WHERE `key` = 'local_port'");
-        $stmt->execute();
-        $localPort = $stmt->fetchColumn() ?: '8443';
+        // Build MQTT command based on action
+        $commands = [];
+        if ($action === 'up') {
+            $channel = (int)$bat['up_relay_channel'];
+            $commands[] = ['channel' => $channel, 'state' => 'on'];
+        } elseif ($action === 'down') {
+            $channel = (int)$bat['down_relay_channel'];
+            $commands[] = ['channel' => $channel, 'state' => 'on'];
+        } elseif ($action === 'stop') {
+            // Stop = turn OFF both channels
+            $commands[] = ['channel' => (int)$bat['up_relay_channel'], 'state' => 'off'];
+            $commands[] = ['channel' => (int)$bat['down_relay_channel'], 'state' => 'off'];
+        }
 
-        $stmt = $this->pdo->prepare("SELECT value FROM sync_config WHERE `key` = 'api_token'");
-        $stmt->execute();
-        $apiToken = $stmt->fetchColumn() ?: '';
+        // Insert commands into pending_commands table
+        $stmt = $this->pdo->prepare("
+            INSERT INTO pending_commands (device_code, command_json, status, priority)
+            VALUES (:device_code, :cmd_json, 'pending', 10)
+        ");
 
-        $localUrl = "http://{$localIp}:{$localPort}";
+        foreach ($commands as $cmd) {
+            $cmdJson = json_encode(['action' => 'relay'] + $cmd);
+            $stmt->execute([
+                ':device_code' => $deviceCode,
+                ':cmd_json' => $cmdJson,
+            ]);
+        }
 
-        $payload = [
-            'type' => 'bat',
+        $this->json([
+            'ok' => true,
+            'message' => 'Đã gửi lệnh ' . $action,
             'bat_id' => $batId,
             'action' => $action,
-            'device_id' => (int)$bat['device_id'],
-        ];
-
-        try {
-            $ch = curl_init($localUrl . '/api/sync/command');
-            curl_setopt_array($ch, [
-                CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => json_encode($payload),
-                CURLOPT_HTTPHEADER => [
-                    'Content-Type: application/json',
-                    'Authorization: Bearer ' . $apiToken,
-                ],
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 10,
-            ]);
-            $resp = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode !== 200) {
-                $this->json(['ok' => false, 'message' => 'Local unreachable (HTTP ' . $httpCode . ')'], 502);
-            }
-
-            $data = json_decode($resp, true);
-            if (!($data['ok'] ?? false)) {
-                $this->json(['ok' => false, 'message' => $data['message'] ?? 'Command failed'], 400);
-            }
-
-            $this->json(['ok' => true, 'message' => 'Đã gửi lệnh ' . $action, 'bat_id' => $batId, 'action' => $action, 'timeout' => (int)$bat['timeout_seconds']]);
-        } catch (\Throwable $e) {
-            error_log("[BatController] error: " . $e->getMessage());
-            $this->json(['ok' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
-        }
+            'device_code' => $deviceCode,
+            'commands_queued' => count($commands),
+            'timeout' => (int)$bat['timeout_seconds'],
+        ]);
     }
 
     private function getBat(int $id): ?array
