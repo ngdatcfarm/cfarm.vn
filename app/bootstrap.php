@@ -21,6 +21,8 @@ require_once ROOT_PATH . '/app/shared/utils/helpers.php';
 // --- load new controllers (classmap not rebuilt after git pull) ---
 require_once ROOT_PATH . '/app/interfaces/http/controllers/web/iot/bat_controller.php';
 require_once ROOT_PATH . '/app/interfaces/http/controllers/web/iot/bat_control_controller.php';
+require_once ROOT_PATH . '/app/interfaces/http/controllers/web/iot/esp32_command_controller.php';
+require_once ROOT_PATH . '/app/interfaces/http/controllers/web/sync/sync_controller.php';
 
 // --- load database ---
 $pdo = require_once ROOT_PATH . '/app/shared/database/mysql.php';
