@@ -4,8 +4,7 @@
 -- from local server to cloud so cloud can send push notifications to remote devices.
 -- =====================================================
 
--- Drop existing tables if they have old schema (without `key` column)
--- This handles the case where table existed but with different structure
+-- Drop existing tables if they have old schema
 DROP TABLE IF EXISTS notification_settings;
 DROP TABLE IF EXISTS push_subscriptions;
 
@@ -21,12 +20,12 @@ CREATE TABLE notification_settings (
 -- push_subscriptions: Web Push subscription storage for remote notification delivery
 CREATE TABLE push_subscriptions (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    endpoint TEXT NOT NULL UNIQUE,
-    p256dh TEXT NOT NULL DEFAULT '',
-    auth TEXT NOT NULL DEFAULT '',
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
     user_label VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_push_subscriptions_endpoint (endpoint(255))
+    UNIQUE KEY uk_push_endpoint (endpoint(255))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Insert default vaccine notification setting
