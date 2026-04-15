@@ -116,42 +116,15 @@ class PushController
     // POST /push/test
     public function test_push(array $vars): void
     {
-        $alert = new \App\Domains\Intelligence\AlertService($this->pdo);
+        // Gửi test notification trực tiếp
+        $this->push->send_all(
+            'TEST',
+            '✅ CFarm Test',
+            'Thông báo hoạt động bình thường! ' . date('H:i d/m/Y'),
+            null,
+            '/'
+        );
 
-        $cycles = $this->pdo->query("
-            SELECT c.*, b.name AS barn_name
-            FROM cycles c JOIN barns b ON c.barn_id = b.id
-            WHERE c.status = 'active'
-        ")->fetchAll(\PDO::FETCH_ASSOC);
-
-        $sent = 0;
-        foreach ($cycles as $c) {
-            $alerts = $alert->get_alerts((int)$c['id']);
-            foreach ($alerts as $a) {
-                if ($a['severity'] === 'info') continue;
-                $this->push->send_all(
-                    $a['code'],
-                    '🚨 ' . $c['barn_name'] . ' · ' . $c['code'],
-                    $a['message'] . ' — ' . $a['detail'],
-                    (int)$c['id'],
-                    '/cycles/' . $c['id']
-                );
-                $sent++;
-            }
-        }
-
-        // Gửi test notification nếu không có cảnh báo nào
-        if ($sent === 0) {
-            $this->push->send_all(
-                'TEST',
-                '✅ CFarm Test',
-                'Thông báo hoạt động bình thường! ' . date('H:i d/m/Y'),
-                null,
-                '/'
-            );
-            $sent = 1;
-        }
-
-        $this->json(true, "Đã gửi $sent thông báo");
+        $this->json(true, "Đã gửi thông báo test");
     }
 }
