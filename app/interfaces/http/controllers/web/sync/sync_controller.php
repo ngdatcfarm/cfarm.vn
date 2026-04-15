@@ -644,6 +644,18 @@ class SyncController
         return $row;
     }
 
+    /**
+     * Convert ISO 8601 datetime string to MySQL datetime format.
+     */
+    private function convert_datetime(string $value): string
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/', $value)) {
+            $value = preg_replace('/[T-Z]/', ' ', $value);
+            $value = trim(substr($value, 0, 19));
+        }
+        return $value;
+    }
+
     // ── Apply a single change from local to cloud DB ─
 
     private function apply_change(array $item): void
@@ -698,6 +710,8 @@ class SyncController
             'barn_default_warehouses',
             // Inventory alert rules (Local PRIMARY → Cloud)
             'inventory_alert_rules',
+            // Notification settings & push subscriptions (Local PRIMARY → Cloud)
+            'notification_settings', 'push_subscriptions',
         ];
 
         if (!in_array($table, $allowed_tables)) {
@@ -707,6 +721,72 @@ class SyncController
         if (!$this->table_exists($table)) {
             throw new \InvalidArgumentException("Table does not exist: {$table}");
         }
+
+        // ── Special handling for key-value / non-ID tables ──
+
+        if ($table === 'notification_settings') {
+            // Uses 'key' as unique identifier, not 'id'
+            if ($action === 'delete') {
+                $key = $payload['key'] ?? null;
+                if ($key) {
+                    $stmt = $this->pdo->prepare("DELETE FROM `{$table}` WHERE `key` = :key");
+                    $stmt->execute([':key' => $key]);
+                }
+                return;
+            }
+            $key = $payload['key'] ?? null;
+            $value = $payload['value'] ?? null;
+            if (!$key) {
+                throw new \InvalidArgumentException("Missing key in notification_settings payload");
+            }
+            $updated_at = !empty($payload['updated_at'])
+                ? $this->convert_datetime($payload['updated_at'])
+                : date('Y-m-d H:i:s');
+            $stmt = $this->pdo->prepare("
+                INSERT INTO notification_settings (`key`, `value`, updated_at)
+                VALUES (:key, :value, :updated_at)
+                ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), updated_at = VALUES(updated_at)
+            ");
+            $stmt->execute([':key' => $key, ':value' => $value, ':updated_at' => $updated_at]);
+            return;
+        }
+
+        if ($table === 'push_subscriptions') {
+            // Uses 'endpoint' as unique identifier, not 'id'
+            if ($action === 'delete') {
+                $endpoint = $payload['endpoint'] ?? null;
+                if ($endpoint) {
+                    $stmt = $this->pdo->prepare("DELETE FROM `{$table}` WHERE endpoint = :endpoint");
+                    $stmt->execute([':endpoint' => $endpoint]);
+                }
+                return;
+            }
+            $endpoint = $payload['endpoint'] ?? null;
+            if (!$endpoint) {
+                throw new \InvalidArgumentException("Missing endpoint in push_subscriptions payload");
+            }
+            $p256dh = $payload['p256dh'] ?? '';
+            $auth = $payload['auth'] ?? '';
+            $user_label = $payload['user_label'] ?? null;
+            $created_at = !empty($payload['created_at'])
+                ? $this->convert_datetime($payload['created_at'])
+                : date('Y-m-d H:i:s');
+            $stmt = $this->pdo->prepare("
+                INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_label, created_at)
+                VALUES (:endpoint, :p256dh, :auth, :user_label, :created_at)
+                ON DUPLICATE KEY UPDATE p256dh = VALUES(p256dh), auth = VALUES(auth), user_label = VALUES(user_label)
+            ");
+            $stmt->execute([
+                ':endpoint' => $endpoint,
+                ':p256dh' => $p256dh,
+                ':auth' => $auth,
+                ':user_label' => $user_label,
+                ':created_at' => $created_at,
+            ]);
+            return;
+        }
+
+        // ── Standard tables using 'id' ──────────────────────────────────
 
         if ($action === 'delete') {
             $id = $payload['id'] ?? null;
