@@ -536,7 +536,46 @@ class SyncController
         }
     }
 
-    // ── 6. GET /api/sync/status ─────────────────────
+    // ── 6. POST /api/sync/notification ─────────────────
+    // Local gửi notification lên cloud để cloud push đến iPhone
+
+    public function notification(array $vars): void
+    {
+        if (!$this->verify_token()) {
+            $this->json(false, ['message' => 'Unauthorized'], 401);
+            return;
+        }
+
+        $body = $this->get_json_body();
+        $type    = $body['type']    ?? 'ALERT';
+        $title   = $body['title']   ?? 'CFarm Alert';
+        $body    = $body['body']    ?? '';
+        $cycle_id = $body['cycle_id'] ?? null;
+        $url     = $body['url']     ?? '/';
+
+        try {
+            $push = new \App\Domains\Intelligence\PushService($this->pdo);
+            $push->send_all($type, $title, $body, $cycle_id ? (int)$cycle_id : null, $url);
+
+            // Log to push_notifications_log
+            $this->pdo->prepare("
+                INSERT INTO push_notifications_log (type, title, body, cycle_id, sent_count, failed_count, sent_at)
+                VALUES (:type, :title, :body, :cycle_id, 1, 0, NOW())
+            ")->execute([
+                ':type'     => $type,
+                ':title'    => $title,
+                ':body'     => $body,
+                ':cycle_id' => $cycle_id,
+            ]);
+
+            $this->json(true, ['message' => 'Notification sent']);
+        } catch (\Throwable $e) {
+            error_log("Notification sync error: " . $e->getMessage());
+            $this->json(false, ['message' => $e->getMessage()], 500);
+        }
+    }
+
+    // ── 7. GET /api/sync/status ─────────────────────
 
     public function status(array $vars): void
     {
