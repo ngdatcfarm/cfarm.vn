@@ -40,6 +40,19 @@ ob_start();
         </div>
     </div>
 
+    <!-- Push Notifications -->
+    <div class="mb-6">
+        <div class="text-sm font-semibold mb-3">🔔 Push Notifications</div>
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700">
+            <div id="push-status" class="text-sm text-gray-500">Đang kiểm tra...</div>
+            <div class="flex gap-2 mt-3">
+                <button id="btn-subscribe" class="btn btn-sm btn-primary hidden">Bật thông báo</button>
+                <button id="btn-unsubscribe" class="btn btn-sm btn-secondary hidden">Tắt thông báo</button>
+                <button id="btn-test" class="btn btn-sm btn-secondary hidden">Gửi test</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Recent Notifications -->
     <div class="mb-6">
         <div class="flex items-center justify-between mb-3">
@@ -93,6 +106,118 @@ ob_start();
     </div>
 
 </div>
+
+<script>
+(async function() {
+    const statusEl = document.getElementById('push-status');
+    const btnSubscribe = document.getElementById('btn-subscribe');
+    const btnUnsubscribe = document.getElementById('btn-unsubscribe');
+    const btnTest = document.getElementById('btn-test');
+
+    let subscription = null;
+    let vapidKey = null;
+
+    async function getVapidKey() {
+        try {
+            const res = await fetch('/push/vapid-public-key');
+            const data = await res.json();
+            return data.key;
+        } catch (e) { return null; }
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+        return outputArray;
+    }
+
+    async function registerSW() {
+        if ('serviceWorker' in navigator) {
+            try {
+                const reg = await navigator.serviceWorker.register('/sw.js');
+                await navigator.serviceWorker.ready;
+                return reg;
+            } catch (e) { return null; }
+        }
+        return null;
+    }
+
+    async function checkSubscription(sw) {
+        if (!sw) return null;
+        try { return await sw.pushManager.getSubscription(); } catch (e) { return null; }
+    }
+
+    async function subscribe() {
+        const sw = await registerSW();
+        if (!sw) { statusEl.textContent = '❌ Trình duyệt không hỗ trợ Service Worker'; return; }
+        if (!vapidKey) vapidKey = await getVapidKey();
+        if (!vapidKey) { statusEl.textContent = '❌ Không lấy được VAPID key'; return; }
+
+        try {
+            subscription = await sw.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidKey)
+            });
+            const subData = subscription.toJSON();
+            await fetch('/push/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(subData)
+            });
+            updateUI(true);
+            statusEl.textContent = '✅ Đã bật thông báo!';
+        } catch (e) {
+            statusEl.textContent = '❌ Lỗi đăng ký: ' + e.message;
+        }
+    }
+
+    async function unsubscribe() {
+        if (subscription) {
+            try { await subscription.unsubscribe(); } catch (e) {}
+        }
+        subscription = null;
+        updateUI(false);
+        statusEl.textContent = 'ℹ️ Đã tắt thông báo';
+    }
+
+    async function sendTest() {
+        try {
+            const res = await fetch('/push/test', { method: 'POST' });
+            const data = await res.json();
+            statusEl.textContent = data.ok ? '✅ Đã gửi thông báo test!' : '❌ Lỗi: ' + data.message;
+        } catch (e) {
+            statusEl.textContent = '❌ Lỗi gửi test';
+        }
+    }
+
+    function updateUI(subscribed) {
+        btnSubscribe.classList.toggle('hidden', subscribed);
+        btnUnsubscribe.classList.toggle('hidden', !subscribed);
+        btnTest.classList.toggle('hidden', !subscribed);
+    }
+
+    async function init() {
+        const sw = await registerSW();
+        subscription = await checkSubscription(sw);
+        if (!sw) { statusEl.textContent = '❌ Trình duyệt không hỗ trợ Service Worker'; return; }
+        if (subscription) {
+            statusEl.textContent = '✅ Đã đăng ký - nhấn "Gửi test" để kiểm tra';
+            updateUI(true);
+        } else {
+            statusEl.textContent = '⚠️ Chưa bật thông báo push';
+            updateUI(false);
+        }
+    }
+
+    btnSubscribe.addEventListener('click', subscribe);
+    btnUnsubscribe.addEventListener('click', unsubscribe);
+    btnTest.addEventListener('click', sendTest);
+    init();
+})();
+</script>
 
 <?php
 $content = ob_get_clean();
