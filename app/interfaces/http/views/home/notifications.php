@@ -13,6 +13,9 @@ $type_icons = [
     'SYSTEM_BARN_CREATED'     => '🏠',
     'SYSTEM_CYCLE_CREATED'   => '📋',
     'SYSTEM_BARN_MISSING_BATS' => '⚠️',
+    // Care notifications
+    'CARE_FEED_MISSING'      => '🔴',
+    'CARE_MEDICATION_REMINDER' => '💊',
     // Generic
     'device_offline' => '⚠️',
     'TEST'           => '🔔',
@@ -28,6 +31,8 @@ $type_colors = [
     'SYSTEM_BARN_CREATED'     => 'bg-green-100 dark:bg-green-900/30',
     'SYSTEM_CYCLE_CREATED'   => 'bg-green-100 dark:bg-green-900/30',
     'SYSTEM_BARN_MISSING_BATS' => 'bg-orange-100 dark:bg-orange-900/30',
+    'CARE_FEED_MISSING'      => 'bg-red-100 dark:bg-red-900/30',
+    'CARE_MEDICATION_REMINDER' => 'bg-yellow-100 dark:bg-yellow-900/30',
     'device_offline' => 'bg-red-100 dark:bg-red-900/30',
     'TEST'           => 'bg-blue-100 dark:bg-blue-900/30',
     'default'        => 'bg-blue-100 dark:bg-blue-900/30',
