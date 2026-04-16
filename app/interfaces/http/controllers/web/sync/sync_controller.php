@@ -726,6 +726,7 @@ class SyncController
 
         if ($table === 'notification_settings') {
             // Uses 'key' as unique identifier, not 'id'
+            error_log("[DEBUG] notification_settings: table={$table}, action={$action}, payload_keys=" . json_encode(array_keys($payload)));
             if ($action === 'delete') {
                 $key = $payload['key'] ?? null;
                 if ($key) {
@@ -736,7 +737,9 @@ class SyncController
             }
             $key = $payload['key'] ?? null;
             $value = $payload['value'] ?? null;
+            error_log("[DEBUG] notification_settings: extracted key=" . ($key ?? 'NULL') . ", value=" . ($value ?? 'NULL'));
             if (!$key) {
+                error_log("[ERROR] notification_settings: Missing key, full payload=" . json_encode($payload));
                 throw new \InvalidArgumentException("Missing key in notification_settings payload");
             }
             $updated_at = !empty($payload['updated_at'])
