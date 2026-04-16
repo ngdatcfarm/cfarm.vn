@@ -2,12 +2,34 @@
 $title = 'Thông báo';
 ob_start();
 
+// Notification type icons
 $type_icons = [
+    // Alert severities
+    'ALERT_DANGER'  => '🔴',
+    'ALERT_WARNING' => '🟡',
+    'ALERT_INFO'    => '🔵',
+    // System notifications
+    'SYSTEM_DEVICE_CREATED'   => '🖥️',
+    'SYSTEM_BARN_CREATED'     => '🏠',
+    'SYSTEM_CYCLE_CREATED'   => '📋',
+    'SYSTEM_BARN_MISSING_BATS' => '⚠️',
+    // Generic
     'device_offline' => '⚠️',
+    'TEST'           => '🔔',
     'default'        => '📳',
 ];
+
+// Notification type colors
 $type_colors = [
+    'ALERT_DANGER'  => 'bg-red-100 dark:bg-red-900/30',
+    'ALERT_WARNING' => 'bg-yellow-100 dark:bg-yellow-900/30',
+    'ALERT_INFO'    => 'bg-blue-100 dark:bg-blue-900/30',
+    'SYSTEM_DEVICE_CREATED'   => 'bg-green-100 dark:bg-green-900/30',
+    'SYSTEM_BARN_CREATED'     => 'bg-green-100 dark:bg-green-900/30',
+    'SYSTEM_CYCLE_CREATED'   => 'bg-green-100 dark:bg-green-900/30',
+    'SYSTEM_BARN_MISSING_BATS' => 'bg-orange-100 dark:bg-orange-900/30',
     'device_offline' => 'bg-red-100 dark:bg-red-900/30',
+    'TEST'           => 'bg-blue-100 dark:bg-blue-900/30',
     'default'        => 'bg-blue-100 dark:bg-blue-900/30',
 ];
 
@@ -51,6 +73,7 @@ foreach ($notifications as $n) {
     <div class="space-y-2">
     <?php foreach ($items as $n): ?>
     <?php
+        // Look up icon and color by notification type
         $icon  = $type_icons[$n->type]  ?? $type_icons['default'];
         $color = $type_colors[$n->type] ?? $type_colors['default'];
     ?>
