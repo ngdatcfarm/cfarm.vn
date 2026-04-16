@@ -19,9 +19,13 @@ try {
     echo "[OK] Database connected\n";
 
     // Check push_subscriptions
-    $stmt = $pdo->query("SELECT COUNT(*) as cnt FROM push_subscriptions WHERE active=1");
+    $stmt = $pdo->query("SELECT COUNT(*) as cnt FROM push_subscriptions");
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    echo "[INFO] Active push_subscriptions: {$row['cnt']}\n";
+    echo "[INFO] Total push_subscriptions: {$row['cnt']}\n";
+
+    // Show columns
+    $cols = $pdo->query("DESCRIBE push_subscriptions")->fetchAll();
+    echo "[INFO] push_subscriptions columns: " . implode(', ', array_column($cols, 'Field')) . "\n";
 
     // Check VAPID config
     $cfg = require __DIR__ . '/app/config.php';
