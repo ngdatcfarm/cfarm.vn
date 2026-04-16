@@ -9,9 +9,9 @@ require __DIR__ . '/vendor/autoload.php';
 echo "=== Testing Cloud Push Notification ===\n\n";
 
 try {
-    // Connect to database
+    // Connect to database (same as app/shared/database/mysql.php)
     $pdo = new PDO(
-        'mysql:host=localhost;dbname=app_cfarm',
+        'mysql:host=127.0.0.1;dbname=cfarm_app_raw;charset=utf8mb4',
         'cfarm_user',
         'cfarm_pass',
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
