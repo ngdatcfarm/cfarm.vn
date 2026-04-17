@@ -40,8 +40,10 @@ if ($barn_id) {
 // Get channels for devices
 $device_channels = [];
 if (!empty($relay_devices)) {
+    $hasChannelNumber = $pdo->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'device_channels' AND column_name = 'channel_number'")->fetchColumn() > 0;
+    $orderClause = $hasChannelNumber ? 'ORDER BY channel_number' : 'ORDER BY id';
     foreach ($relay_devices as $dev) {
-        $stmt = $pdo->prepare("SELECT * FROM device_channels WHERE device_id = ? ORDER BY channel_number");
+        $stmt = $pdo->prepare("SELECT * FROM device_channels WHERE device_id = ? $orderClause");
         $stmt->execute([$dev->id]);
         $device_channels[$dev->id] = $stmt->fetchAll(PDO::FETCH_OBJ);
     }
@@ -50,10 +52,11 @@ if (!empty($relay_devices)) {
 // Get existing curtains for this barn
 $curtains = [];
 if ($barn_id) {
+    $channelCol = $hasChannelNumber ? 'channel_number' : 'id';
     $stmt = $pdo->prepare("
-        SELECT cc.*, 
-               (SELECT channel_number FROM device_channels WHERE id = cc.up_channel_id) as up_ch,
-               (SELECT channel_number FROM device_channels WHERE id = cc.down_channel_id) as down_ch
+        SELECT cc.*,
+               (SELECT $channelCol FROM device_channels WHERE id = cc.up_channel_id) as up_ch,
+               (SELECT $channelCol FROM device_channels WHERE id = cc.down_channel_id) as down_ch
         FROM curtain_configs cc
         WHERE cc.barn_id = ?
     ");
@@ -201,16 +204,17 @@ const deviceChannels = <?= json_encode($device_channels) ?>;
 function loadChannels(deviceId) {
     const upSelect = document.getElementById('upChannel');
     const downSelect = document.getElementById('downChannel');
-    
+
     upSelect.innerHTML = '<option value="">— Chọn kênh —</option>';
     downSelect.innerHTML = '<option value="">— Chọn kênh —</option>';
-    
+
     if (!deviceId || !deviceChannels[deviceId]) return;
-    
+
     const channels = deviceChannels[deviceId];
     channels.forEach(ch => {
-        const opt1 = new Option('CH' + ch.channel_number + ' - ' + ch.name, ch.id);
-        const opt2 = new Option('CH' + ch.channel_number + ' - ' + ch.name, ch.id);
+        const chNum = ch.channel_number ?? ch.id;
+        const opt1 = new Option('CH' + chNum + ' - ' + ch.name, ch.id);
+        const opt2 = new Option('CH' + chNum + ' - ' + ch.name, ch.id);
         upSelect.add(opt1);
         downSelect.add(opt2);
     });

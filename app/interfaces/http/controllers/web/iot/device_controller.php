@@ -40,10 +40,10 @@ class DeviceController
 
         // Lấy channels cho mỗi device
         foreach ($devices as $device) {
-            $stmt = $this->pdo->prepare("
-                SELECT * FROM device_channels 
-                WHERE device_id = :id ORDER BY channel_number
-            ");
+            // Check if channel_number column exists
+            $hasChannelNumber = $this->pdo->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'device_channels' AND column_name = 'channel_number'")->fetchColumn() > 0;
+            $orderClause = $hasChannelNumber ? 'ORDER BY channel_number' : 'ORDER BY id';
+            $stmt = $this->pdo->prepare("SELECT * FROM device_channels WHERE device_id = :id $orderClause");
             $stmt->execute([':id' => $device->id]);
             $device->channels = $stmt->fetchAll(PDO::FETCH_OBJ);
         }
@@ -383,7 +383,9 @@ class DeviceController
         }
 
         // Get channels
-        $stmt = $this->pdo->prepare("SELECT * FROM device_channels WHERE device_id = ? ORDER BY channel_number");
+        $hasChannelNumber = $this->pdo->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'device_channels' AND column_name = 'channel_number'")->fetchColumn() > 0;
+        $orderClause = $hasChannelNumber ? 'ORDER BY channel_number' : 'ORDER BY id';
+        $stmt = $this->pdo->prepare("SELECT * FROM device_channels WHERE device_id = ? $orderClause");
         $stmt->execute([$id]);
         $device['channels'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

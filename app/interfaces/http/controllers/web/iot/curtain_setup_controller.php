@@ -61,18 +61,18 @@ class CurtainSetupController
 
             // Lấy channels cho mỗi device
             foreach ($devices as $dev) {
-                $ch_stmt = $this->pdo->prepare("
-                    SELECT * FROM device_channels 
-                    WHERE device_id = ? ORDER BY channel_number
-                ");
+                $hasChannelNumber = $this->pdo->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'device_channels' AND column_name = 'channel_number'")->fetchColumn() > 0;
+                $orderClause = $hasChannelNumber ? 'ORDER BY channel_number' : 'ORDER BY id';
+                $ch_stmt = $this->pdo->prepare("SELECT * FROM device_channels WHERE device_id = ? $orderClause");
                 $ch_stmt->execute([$dev->id]);
                 $device_channels[$dev->id] = $ch_stmt->fetchAll(PDO::FETCH_OBJ);
             }
 
             // Lấy curtains đã cấu hình
+            $channelCol = $hasChannelNumber ? 'channel_number' : 'id';
             $curtain_stmt = $this->pdo->prepare("
-                SELECT cc.*, 
-                       uc.channel_number as up_ch, dc.channel_number as down_ch
+                SELECT cc.*,
+                       uc.$channelCol as up_ch, dc.$channelCol as down_ch
                 FROM curtain_configs cc
                 LEFT JOIN device_channels uc ON uc.id = cc.up_channel_id
                 LEFT JOIN device_channels dc ON dc.id = cc.down_channel_id
