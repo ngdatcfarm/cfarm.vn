@@ -15,7 +15,7 @@ use PDO;
  */
 class CareProxyController
 {
-    private const LOCAL_IP = 'alternate-hrs-governor-surfaces.trycloudflare.com';
+    private const LOCAL_IP = 'programs-belt-heel-shift.trycloudflare.com';
     private const LOCAL_PORT = 443;
 
     public function __construct(private PDO $pdo) {}
