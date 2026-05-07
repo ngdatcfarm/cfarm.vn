@@ -500,7 +500,7 @@ class SyncController
             return;
         }
 
-        $stmt = $this->pdo->prepare("SELECT value FROM sync_config WHERE `key` = 'api_token'");
+        $stmt = $this->pdo->prepare("SELECT value FROM sync_config WHERE `key` = 'local_token'");
         $stmt->execute();
         $row = $stmt->fetch();
         $token = $row['value'] ?? '';

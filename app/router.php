@@ -148,3 +148,23 @@ $r->addRoute('POST', '/api/sync/farm-data',     [SyncController::class, 'farm_da
 $r->addRoute('POST', '/api/sync/command',        [SyncController::class, 'send_command']);
 $r->addRoute('POST', '/api/sync/notification',  [SyncController::class, 'notification']);
 $r->addRoute('GET',  '/api/sync/status',          [SyncController::class, 'status']);
+
+// =============================================================================
+// CARE - Cloud writes care to local via HTTP proxy
+// =============================================================================
+use App\Interfaces\Http\Controllers\Web\Care\CareController;
+use App\Interfaces\Http\Controllers\Web\Care\CareProxyController;
+
+// Care page (view)
+$r->addRoute('GET', '/care', [CareController::class, 'index']);
+
+// Care proxy API (cloud → local)
+$r->addRoute('GET',  '/api/cloud/care/cycles',                      [CareProxyController::class, 'get_cycles']);
+$r->addRoute('GET',  '/api/cloud/care/barns',                       [CareProxyController::class, 'get_barns']);
+$r->addRoute('GET',  '/api/cloud/care/{type:[a-z]+}/{cycle_id:\d+}', [CareProxyController::class, 'get']);
+$r->addRoute('POST', '/api/cloud/care/feed',                        [CareProxyController::class, 'feed']);
+$r->addRoute('POST', '/api/cloud/care/death',                      [CareProxyController::class, 'death']);
+$r->addRoute('POST', '/api/cloud/care/medication',                  [CareProxyController::class, 'medication']);
+$r->addRoute('POST', '/api/cloud/care/weight',                       [CareProxyController::class, 'weight']);
+$r->addRoute('POST', '/api/cloud/care/sale',                        [CareProxyController::class, 'sale']);
+$r->addRoute('POST', '/api/cloud/care/water',                       [CareProxyController::class, 'water']);
