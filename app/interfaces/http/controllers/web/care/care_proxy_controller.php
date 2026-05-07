@@ -10,13 +10,13 @@ use PDO;
  * User writes care on cloud UI → cloud proxies to local via HTTP
  * → local writes to PostgreSQL → local syncs back to cloud via sync_queue
  *
- * Local IP: 192.168.1.9:8002
+ * Local connection: Cloudflare Tunnel (https://alternate-hrs-governor-surfaces.trycloudflare.com)
  * Local auth: Bearer token from sync_config.local_token
  */
 class CareProxyController
 {
-    private const LOCAL_IP = '192.168.1.9';
-    private const LOCAL_PORT = 8002;
+    private const LOCAL_IP = 'alternate-hrs-governor-surfaces.trycloudflare.com';
+    private const LOCAL_PORT = 443;
 
     public function __construct(private PDO $pdo) {}
 
@@ -56,9 +56,9 @@ class CareProxyController
         $token = $this->get_local_token();
 
         if ($method === 'GET' && $cycleId !== null) {
-            $url = "http://" . self::LOCAL_IP . ":" . self::LOCAL_PORT . "/api/farm/care/{$careType}/{$cycleId}";
+            $url = "https://" . self::LOCAL_IP . ":" . self::LOCAL_PORT . "/api/farm/care/{$careType}/{$cycleId}";
         } else {
-            $url = "http://" . self::LOCAL_IP . ":" . self::LOCAL_PORT . "/api/farm/care/{$careType}";
+            $url = "https://" . self::LOCAL_IP . ":" . self::LOCAL_PORT . "/api/farm/care/{$careType}";
         }
 
         $ch = curl_init($url);
@@ -74,6 +74,8 @@ class CareProxyController
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 30,
             CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
         ]);
 
         $resp = curl_exec($ch);
@@ -102,7 +104,7 @@ class CareProxyController
     public function get_cycles(array $vars): void
     {
         $token = $this->get_local_token();
-        $url = "http://" . self::LOCAL_IP . ":" . self::LOCAL_PORT . "/api/farm/cycles";
+        $url = "https://" . self::LOCAL_IP . ":" . self::LOCAL_PORT . "/api/farm/cycles";
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -128,7 +130,7 @@ class CareProxyController
     public function get_barns(array $vars): void
     {
         $token = $this->get_local_token();
-        $url = "http://" . self::LOCAL_IP . ":" . self::LOCAL_PORT . "/api/farm/barns?active_only=false";
+        $url = "https://" . self::LOCAL_IP . ":" . self::LOCAL_PORT . "/api/farm/barns?active_only=false";
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
