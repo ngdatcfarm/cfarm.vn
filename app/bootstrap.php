@@ -23,6 +23,8 @@ require_once ROOT_PATH . '/app/interfaces/http/controllers/web/iot/bat_controlle
 require_once ROOT_PATH . '/app/interfaces/http/controllers/web/iot/bat_control_controller.php';
 require_once ROOT_PATH . '/app/interfaces/http/controllers/web/iot/esp32_command_controller.php';
 require_once ROOT_PATH . '/app/interfaces/http/controllers/web/sync/sync_controller.php';
+require_once ROOT_PATH . '/app/interfaces/http/controllers/web/care/care_controller.php';
+require_once ROOT_PATH . '/app/interfaces/http/controllers/web/care/care_proxy_controller.php';
 
 // --- load database ---
 $pdo = require_once ROOT_PATH . '/app/shared/database/mysql.php';
