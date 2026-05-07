@@ -16,9 +16,6 @@ class CareController
     public function index(array $vars): void
     {
         $title = 'Chăm sóc - CFarm';
-        ob_start();
         require view_path('care/care_index.php');
-        $content = ob_get_clean();
-        require view_path('layouts/main.php');
     }
 }
